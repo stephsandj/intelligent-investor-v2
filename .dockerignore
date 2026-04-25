@@ -1,0 +1,40 @@
+# ── Secrets — never bake into the image ──────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Python bytecode ───────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# ── Runtime outputs (logs, PDFs, JSON caches) ─────────────────────
+logs/
+*.log
+intelligent_investor_*.pdf
+picks_detail.json
+etf_results.json
+bond_results.json
+
+# ── Local dev tooling — not needed in the image ───────────────────
+start_local.sh
+deploy_ec2.sh
+
+# ── Git ───────────────────────────────────────────────────────────
+.git/
+.gitignore
+
+# ── macOS ─────────────────────────────────────────────────────────
+.DS_Store
+**/.DS_Store
+
+# ── Local PostgreSQL binaries (330 MB — definitely not in image) ──
+# (only present on the dev machine, not on the VPS)

@@ -1,0 +1,21 @@
+{
+  "email_enabled": false,
+  "pdf_enabled": true,
+  "markets": [
+    "AMEX"
+  ],
+  "loser_period": "daily100",
+  "stock_geography": "usa",
+  "schedule_hour": 1,
+  "schedule_minute": 15,
+  "schedule_days": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "enabled": true,
+  "email_address": "sandjstephane@yahoo.fr"
+}

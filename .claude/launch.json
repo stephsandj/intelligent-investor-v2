@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ii-v2-backend",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["dashboard_v2.py"],
+      "port": 5051
+    }
+  ]
+}

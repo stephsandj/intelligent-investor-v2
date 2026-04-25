@@ -1,0 +1,87 @@
+name: Test & Validate
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest
+    
+    - name: Check for hardcoded paths
+      run: |
+        if grep -r "stephanesandjong\|Library/Application\|Documents/" *.py *.html 2>/dev/null | grep -v "__pycache__"; then
+          echo "ERROR: Found hardcoded local paths!"
+          exit 1
+        fi
+        echo "✅ No hardcoded paths found"
+    
+    - name: Validate .env.example
+      run: |
+        if [ ! -f .env.example ]; then
+          echo "ERROR: .env.example not found!"
+          exit 1
+        fi
+        echo "✅ .env.example present"
+    
+    - name: Check .gitignore
+      run: |
+        if ! grep -q "^\.env$" .gitignore; then
+          echo "ERROR: .env not in .gitignore!"
+          exit 1
+        fi
+        echo "✅ .gitignore configured correctly"
+    
+    - name: Validate Docker files
+      run: |
+        if [ ! -f Dockerfile ]; then
+          echo "ERROR: Dockerfile not found!"
+          exit 1
+        fi
+        if [ ! -f docker-compose.yml ]; then
+          echo "ERROR: docker-compose.yml not found!"
+          exit 1
+        fi
+        echo "✅ Docker files present and valid"
+    
+    - name: Python syntax check
+      run: |
+        python -m py_compile *.py || exit 1
+        echo "✅ Python syntax valid"
+    
+    - name: Basic import test
+      run: |
+        python -c "import models; import auth; import dashboard_v2" && echo "✅ Core imports successful"
+
+  docker-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    
+    - name: Build Docker image
+      run: docker build -t ii-v2:test .
+    
+    - name: Check image
+      run: |
+        docker images ii-v2:test
+        echo "✅ Docker image built successfully"

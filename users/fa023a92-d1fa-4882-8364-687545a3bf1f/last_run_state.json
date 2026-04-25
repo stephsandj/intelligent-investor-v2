@@ -1,0 +1,11 @@
+{
+  "started_at": "2026-04-24T23:53:10.179958",
+  "finished_at": "2026-04-25T00:00:13.918693",
+  "exit_code": 0,
+  "run_summary": {
+    "universe": "5,455",
+    "down_today": "1,571",
+    "analyzed": "100",
+    "top_picks": "5"
+  }
+}
