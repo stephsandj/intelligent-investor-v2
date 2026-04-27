@@ -386,17 +386,14 @@ def run_screen(on_progress=None) -> Dict:
     if on_progress:
         on_progress(f"Risk-free rate: {rf*100:.2f}%  |  CPI inflation: {inflation*100:.1f}%")
 
-    import requests as _req
-    _sess = _req.Session()
-    try:
-      results = []
-      total   = len(BOND_ETF_UNIVERSE)
+    results = []
+    total   = len(BOND_ETF_UNIVERSE)
 
-      for i, symbol in enumerate(BOND_ETF_UNIVERSE):
+    for i, symbol in enumerate(BOND_ETF_UNIVERSE):
         if on_progress:
             on_progress(f"  [{i+1}/{total}] Fetching {symbol}…")
         try:
-            ticker = yf.Ticker(symbol, session=_sess)
+            ticker = yf.Ticker(symbol)
             info   = ticker.info or {}
             name   = info.get("longName") or info.get("shortName") \
                      or _BOND_META.get(symbol, (None, None, symbol))[2]
@@ -406,7 +403,7 @@ def run_screen(on_progress=None) -> Dict:
             h3 = pd.DataFrame()
             for _attempt, _period in enumerate(["3y", "3y", "2y"], start=1):
                 h3 = yf.download(symbol, period=_period, auto_adjust=True,
-                                 progress=False, threads=False, session=_sess)
+                                 progress=False, threads=False)
                 if not h3.empty:
                     break
                 if on_progress:
@@ -444,9 +441,9 @@ def run_screen(on_progress=None) -> Dict:
                 _log.getLogger(__name__).warning("bond_etf_screener: %s error: %s", symbol, e)
         time.sleep(0.5)  # increased from 0.3 → 0.5s to reduce rate-limit pressure
 
-      results.sort(key=lambda x: x["score"], reverse=True)
+    results.sort(key=lambda x: x["score"], reverse=True)
 
-      return {
+    return {
         "results":        results,
         "top5":           results[:5],
         "screened":       total,
@@ -455,12 +452,7 @@ def run_screen(on_progress=None) -> Dict:
         "risk_free_rate": round(rf * 100, 2),
         "inflation_rate": round(inflation * 100, 2),
         "duration_secs":  round(time.time() - t0),
-      }
-    finally:
-        try:
-            _sess.close()
-        except Exception:
-            pass
+    }
 
 
 if __name__ == "__main__":
