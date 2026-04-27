@@ -38,6 +38,8 @@ _load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 # ─────────────────────────────────────────────────────────────────────────────
 import glob, re, json, signal, subprocess, threading, logging
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+_TZ_EST = ZoneInfo("America/New_York")  # All user-facing times in Eastern
 from functools import wraps
 
 import logging.handlers
@@ -124,6 +126,39 @@ def _ticker_results_file(user_id: str) -> str:
 
 def _user_state_file(user_id: str) -> str:
     return os.path.join(_user_data_dir(user_id), "last_run_state.json")
+
+
+def _cleanup_stale_running_files():
+    """Delete all *_running.json flag files at startup.
+
+    These files are created when a screen run starts and deleted when it ends.
+    If the server crashes or is restarted while a run is in progress the file
+    remains on disk and causes the status endpoints to falsely report
+    running=True for up to 30 minutes — making the frontend spin forever
+    after a browser refresh. Purging at startup guarantees a clean slate.
+    """
+    users_dir = os.path.join(AGENT_DIR, "users")
+    if not os.path.isdir(users_dir):
+        return
+    _stale_names = ("etf_running.json", "bond_running.json",
+                    "ticker_running.json", "agent_running.json")
+    for entry in os.scandir(users_dir):
+        if not entry.is_dir():
+            continue
+        for fname in _stale_names:
+            fpath = os.path.join(entry.path, fname)
+            try:
+                os.remove(fpath)
+            except FileNotFoundError:
+                pass  # already gone — normal case
+            except Exception as _e:
+                pass  # non-fatal; status endpoint will fall back to in-memory state
+
+
+# Run at import time so both `python3 dashboard_v2.py` and Gunicorn workers
+# start with a clean slate — no leftover running-flag files from prior crashes.
+_cleanup_stale_running_files()
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. Flask app
@@ -247,7 +282,8 @@ _user_processes:  dict = {}                    # user_id -> subprocess.Popen han
 _user_log_files:  dict = {}                    # user_id -> path of the current agent_run_*.log file
 
 def _default_run_state() -> dict:
-    return {"running": False, "started_at": None, "finished_at": None, "exit_code": None, "run_summary": {}}
+    return {"running": False, "started_at": None, "finished_at": None, "exit_code": None,
+            "last_completed_at": None, "run_summary": {}}
 
 def _persist_run_state(user_id: str) -> None:
     """Write a user's finished-run state (including run summary stats) to disk for restart persistence."""
@@ -255,11 +291,13 @@ def _persist_run_state(user_id: str) -> None:
         state = _user_run_states.get(user_id, _default_run_state())
         with open(_user_state_file(user_id), "w") as f:
             json.dump({
-                "started_at":  state.get("started_at"),
-                "finished_at": state.get("finished_at"),
-                "exit_code":   state.get("exit_code"),
+                "started_at":        state.get("started_at"),
+                "finished_at":       state.get("finished_at"),
+                "exit_code":         state.get("exit_code"),
+                # Only the last *successful* completion time — shown in LAST RUN KPI card
+                "last_completed_at": state.get("last_completed_at"),
                 # Persist run summary so stats bar survives any restart
-                "run_summary": state.get("run_summary", {}),
+                "run_summary":       state.get("run_summary", {}),
             }, f, indent=2)
     except Exception as _e:
         logger.warning("Could not persist run state for %s: %s", user_id, _e)
@@ -275,13 +313,19 @@ def _load_persisted_run_states() -> None:
             try:
                 with open(sf) as f:
                     saved = json.load(f)
+                # One-time migration: if last_completed_at is absent (older state file)
+                # but finished_at is from a successful run (exit_code == 0), backfill it.
+                _last_completed = saved.get("last_completed_at")
+                if not _last_completed and saved.get("exit_code") == 0:
+                    _last_completed = saved.get("finished_at")
                 _user_run_states[uid] = {
-                    "running":     False,
-                    "started_at":  saved.get("started_at"),
-                    "finished_at": saved.get("finished_at"),
-                    "exit_code":   saved.get("exit_code"),
+                    "running":           False,
+                    "started_at":        saved.get("started_at"),
+                    "finished_at":       saved.get("finished_at"),
+                    "exit_code":         saved.get("exit_code"),
+                    "last_completed_at": _last_completed,
                     # Restore persisted run summary so stats bar works immediately after restart
-                    "run_summary": saved.get("run_summary", {}),
+                    "run_summary":       saved.get("run_summary", {}),
                 }
             except Exception as _e:
                 logger.warning("Could not load persisted run state for %s: %s", uid, _e)
@@ -293,9 +337,37 @@ _AGENT_PY = os.path.join(AGENT_DIR, "value_investor_agent.py")
 
 
 def _get_run_state(user_id: "str | None" = None) -> dict:
-    if user_id:
-        return dict(_user_run_states.get(user_id, _default_run_state()))
-    return _default_run_state()
+    if not user_id:
+        return _default_run_state()
+    state = dict(_user_run_states.get(user_id, _default_run_state()))
+    # Cross-worker: if this Gunicorn worker has no memory of the run, check the
+    # PID file written by whichever worker actually launched the subprocess.
+    if not state.get("running"):
+        pid_file = os.path.join(_user_data_dir(user_id), "agent_running.json")
+        try:
+            if os.path.exists(pid_file):
+                with open(pid_file) as _pf:
+                    pid_data = json.load(_pf)
+                pid = pid_data.get("pid")
+                if pid:
+                    try:
+                        os.kill(pid, 0)  # signal 0: check existence only
+                        state = {
+                            "running":           True,
+                            "started_at":        pid_data.get("started_at"),
+                            "finished_at":       None,
+                            "exit_code":         None,
+                            "run_summary":       state.get("run_summary", {}),
+                            "last_completed_at": state.get("last_completed_at"),
+                        }
+                    except (ProcessLookupError, PermissionError, OSError):
+                        try:
+                            os.remove(pid_file)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+    return state
 
 
 def _get_daily_log_path():
@@ -369,28 +441,41 @@ def _start_agent(user_id: "str | None" = None, source: str = "manual"):
         )
         _user_processes[user_id]  = proc
         _user_log_files[user_id]  = log_file_path
+        _prev_state = _user_run_states.get(user_id, _default_run_state())
         _user_run_states[user_id] = {
-            "running":     True,
-            "started_at":  datetime.now().isoformat(),
-            "finished_at": None,
-            "exit_code":   None,
-            "source":      source,   # "manual" | "scheduled"
+            "running":           True,
+            "started_at":        datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "finished_at":       None,
+            "exit_code":         None,
+            "source":            source,   # "manual" | "scheduled"
+            # Carry forward last successful completion time so LAST RUN KPI card stays
+            # correct while the new run is in progress.
+            "last_completed_at": _prev_state.get("last_completed_at"),
         }
+        # Write PID file so ALL Gunicorn workers can detect this run is active
+        try:
+            with open(os.path.join(out_dir, "agent_running.json"), "w") as _pf:
+                json.dump({"pid": proc.pid, "started_at": _user_run_states[user_id]["started_at"]}, _pf)
+        except Exception as _pf_err:
+            logger.warning("Could not write agent PID file: %s", _pf_err)
         logger.info("Stock screen started for user %s (pid=%d, source=%s)",
                     user_id[:8], proc.pid, source)
 
     def _monitor(uid, p):
         p.wait()
-        finished_at = datetime.now().isoformat()
+        finished_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         with _run_lock:
             prev = _user_run_states.get(uid, {})
             _user_run_states[uid] = {
-                "running":     False,
-                "started_at":  prev.get("started_at"),
-                "finished_at": finished_at,
-                "exit_code":   p.returncode,
-                "run_summary": {},
-                "source":      prev.get("source", "manual"),  # preserve source after run ends
+                "running":           False,
+                "started_at":        prev.get("started_at"),
+                "finished_at":       finished_at,
+                "exit_code":         p.returncode,
+                "run_summary":       {},
+                "source":            prev.get("source", "manual"),  # preserve source after run ends
+                # Only update last_completed_at on a clean exit — stops/crashes keep the
+                # previous successful timestamp so LAST RUN always reflects a completed run.
+                "last_completed_at": finished_at if p.returncode == 0 else prev.get("last_completed_at"),
             }
             _user_processes.pop(uid, None)
         # After a successful run, parse the completion stats from the agent log
@@ -404,6 +489,13 @@ def _start_agent(user_id: "str | None" = None, source: str = "manual"):
                     logger.debug("Persisting run_summary for user %s: %s", uid[:8], summary)
             except Exception as _sum_err:
                 logger.warning("Could not parse run_summary for user %s: %s", uid[:8], _sum_err)
+        # Remove PID file — signals all workers this run is done
+        try:
+            os.remove(os.path.join(_user_data_dir(uid), "agent_running.json"))
+        except FileNotFoundError:
+            pass
+        except Exception as _pf_err:
+            logger.warning("Could not remove agent PID file: %s", _pf_err)
         _persist_run_state(uid)
         logger.info("Stock screen finished for user %s (exit=%d)", uid[:8], p.returncode)
 
@@ -425,12 +517,21 @@ def _stop_agent(user_id: "str | None" = None):
         except Exception:
             pass
         _user_run_states[user_id] = {
-            "running":     False,
-            "started_at":  state.get("started_at"),
-            "finished_at": datetime.now().isoformat(),
-            "exit_code":   -1,
+            "running":           False,
+            "started_at":        state.get("started_at"),
+            "finished_at":       datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "exit_code":         -1,
+            # Preserve last successful completion time — stop events must not overwrite it
+            "last_completed_at": state.get("last_completed_at"),
         }
         _user_processes.pop(user_id, None)
+    # Remove PID file on manual stop
+    try:
+        os.remove(os.path.join(_user_data_dir(user_id), "agent_running.json"))
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
     _persist_run_state(user_id)
     logger.info("Stock screen stopped by user %s", user_id[:8])
     return True, "Agent stopped"
@@ -449,7 +550,7 @@ def _next_run_time(user_id=None):
             days = [0, 1, 2, 3, 4]
     except Exception:
         hour, minute, days = 18, 0, [0, 1, 2, 3, 4]
-    now = datetime.now()
+    now = datetime.now(_TZ_EST)
     candidate = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
     if now >= candidate:
         candidate += timedelta(days=1)
@@ -512,16 +613,16 @@ def _list_reports(user_id: str):
         fname = os.path.basename(p)
         dp = fname.replace("intelligent_investor_", "").replace(".pdf", "")
         try:
-            if len(dp) == 15:  # YYYYMMDD_HHMMSS — new format, parse directly
-                dt_parsed = datetime.strptime(dp, "%Y%m%d_%H%M%S")
-                d = dt_parsed.strftime("%b %d, %Y  %H:%M:%S")
+            if len(dp) == 15:  # YYYYMMDD_HHMMSS — already Eastern time (generated by datetime.now(_TZ_EST))
+                dt_est = datetime.strptime(dp, "%Y%m%d_%H%M%S")
+                d = dt_est.strftime("%b %d, %Y  %H:%M:%S") + " EST"
             elif len(dp) == 8:  # YYYYMMDD — old format, use file mtime for time
                 dt_date = datetime.strptime(dp, "%Y%m%d")
                 mtime = os.path.getmtime(p)
-                dt_mtime = datetime.fromtimestamp(mtime)
+                dt_mtime = datetime.fromtimestamp(mtime, tz=_TZ_EST)
                 # Use mtime for time if it falls on the same date
                 if dt_mtime.date() == dt_date.date():
-                    d = dt_mtime.strftime("%b %d, %Y  %H:%M:%S")
+                    d = dt_mtime.strftime("%b %d, %Y  %H:%M:%S") + " EST"
                 else:
                     d = dt_date.strftime("%b %d, %Y")
             else:
@@ -813,11 +914,9 @@ _user_bond_states: dict = {}  # user_id -> {running, error, started_at}
 _user_etf_cancel:  dict = {}  # user_id -> threading.Event
 _user_bond_cancel: dict = {}  # user_id -> threading.Event
 
-# Single execution locks prevent concurrent importlib.reload() calls on the same module,
-# which is not thread-safe. Only one ETF and one Bond screen can execute at a time
-# across all users. Each user still gets their own results file and state.
-_etf_exec_lock  = threading.Lock()
-_bond_exec_lock = threading.Lock()
+# Per-user state locks — protect the _user_etf_states / _user_bond_states dicts.
+# No global execution lock needed: run_screen() in both screener modules is fully
+# stateless (all variables are local), so concurrent runs across users are safe.
 _etf_state_lock  = threading.Lock()  # protects _user_etf_states dict
 _bond_state_lock = threading.Lock()  # protects _user_bond_states dict
 
@@ -839,21 +938,27 @@ def _run_etf_screen(user_id: str):
     """Run the ETF screen for a specific user. Writes to their private results file."""
     cancel_ev = _user_etf_cancel.setdefault(user_id, threading.Event())
     cancel_ev.clear()
+    try:
+        with open(os.path.join(_user_data_dir(user_id), "etf_running.json"), "w") as _rf:
+            json.dump({"started_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}, _rf)
+    except Exception:
+        pass
     with _etf_state_lock:
-        _user_etf_states[user_id]["started_at"] = datetime.utcnow().isoformat() + "Z"
+        _user_etf_states[user_id]["started_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     sys.path.insert(0, AGENT_DIR)
 
     def _progress(msg: str):
         logger.info("[etf-screen uid=%s] %s", user_id[:8], msg)
 
-    with _etf_exec_lock:  # single execution at a time (importlib.reload is not thread-safe)
+    try:
+        # No global lock needed — growth_etf_screener.run_screen() is fully stateless
+        # (all variables are local to the function). Concurrent runs across users are safe.
+        import growth_etf_screener as m
         try:
-            import importlib, growth_etf_screener as m
-            importlib.reload(m)
             data = m.run_screen(on_progress=_progress)
             if cancel_ev.is_set():
-                return
-            if data.get("results") and len(data["results"]) > 0:
+                pass  # finally block below still runs — cleans up file + state
+            elif data.get("results") and len(data["results"]) > 0:
                 with open(_etf_results_file(user_id), "w") as f:
                     json.dump(data, f, indent=2)
             else:
@@ -863,29 +968,43 @@ def _run_etf_screen(user_id: str):
             if not cancel_ev.is_set():
                 with _etf_state_lock:
                     _user_etf_states[user_id]["error"] = str(e)
-    with _etf_state_lock:
-        _user_etf_states[user_id]["running"] = False
+    finally:
+        # Always clean up — whether run completed, was cancelled, or raised an exception.
+        # Without this, etf_running.json stays on disk and the stale-check in
+        # api_etf_status() would wrongly return running=True for up to 30 minutes.
+        with _etf_state_lock:
+            _user_etf_states[user_id]["running"] = False
+        try:
+            os.remove(os.path.join(_user_data_dir(user_id), "etf_running.json"))
+        except Exception:
+            pass
 
 
 def _run_bond_screen(user_id: str):
     """Run the Bond screen for a specific user. Writes to their private results file."""
     cancel_ev = _user_bond_cancel.setdefault(user_id, threading.Event())
     cancel_ev.clear()
+    try:
+        with open(os.path.join(_user_data_dir(user_id), "bond_running.json"), "w") as _rf:
+            json.dump({"started_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}, _rf)
+    except Exception:
+        pass
     with _bond_state_lock:
-        _user_bond_states[user_id]["started_at"] = datetime.utcnow().isoformat() + "Z"
+        _user_bond_states[user_id]["started_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     sys.path.insert(0, AGENT_DIR)
 
     def _progress(msg: str):
         logger.info("[bond-screen uid=%s] %s", user_id[:8], msg)
 
-    with _bond_exec_lock:
+    try:
+        # No global lock needed — bond_etf_screener.run_screen() is fully stateless
+        # (all variables are local to the function). Concurrent runs across users are safe.
+        import bond_etf_screener as m
         try:
-            import importlib, bond_etf_screener as m
-            importlib.reload(m)
             data = m.run_screen(on_progress=_progress)
             if cancel_ev.is_set():
-                return
-            if data.get("results") and len(data["results"]) > 0:
+                pass  # finally block below still runs — cleans up file + state
+            elif data.get("results") and len(data["results"]) > 0:
                 with open(_bond_results_file(user_id), "w") as f:
                     json.dump(data, f, indent=2)
             else:
@@ -895,16 +1014,29 @@ def _run_bond_screen(user_id: str):
             if not cancel_ev.is_set():
                 with _bond_state_lock:
                     _user_bond_states[user_id]["error"] = str(e)
-    with _bond_state_lock:
-        _user_bond_states[user_id]["running"] = False
+    finally:
+        # Always clean up — whether run completed, was cancelled, or raised an exception.
+        # Without this, bond_running.json stays on disk and the stale-check in
+        # api_bond_status() would wrongly return running=True for up to 30 minutes.
+        with _bond_state_lock:
+            _user_bond_states[user_id]["running"] = False
+        try:
+            os.remove(os.path.join(_user_data_dir(user_id), "bond_running.json"))
+        except Exception:
+            pass
 
 
 def _run_ticker_research(user_id: str, symbol: str):
     """Fetch, score, and AI-analyse a single ticker for a specific user."""
     cancel_ev = _user_ticker_cancel.setdefault(user_id, threading.Event())
     cancel_ev.clear()
+    try:
+        with open(os.path.join(_user_data_dir(user_id), "ticker_running.json"), "w") as _rf:
+            json.dump({"started_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}, _rf)
+    except Exception:
+        pass
     with _ticker_state_lock:
-        _user_ticker_states[user_id]["started_at"] = datetime.utcnow().isoformat() + "Z"
+        _user_ticker_states[user_id]["started_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         _user_ticker_states[user_id]["symbol"] = symbol
 
     sys.path.insert(0, AGENT_DIR)
@@ -1003,7 +1135,7 @@ def _run_ticker_research(user_id: str, symbol: str):
 
         with open(_ticker_results_file(user_id), "w") as f:
             json.dump({"symbol": symbol.upper(), "result": pick,
-                       "run_date": datetime.utcnow().isoformat() + "Z"}, f, indent=2)
+                       "run_date": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}, f, indent=2)
         logger.info("Ticker research done for user %s: %s score=%.1f",
                     user_id[:8], symbol.upper(), scored["score"])
 
@@ -1030,6 +1162,10 @@ def _run_ticker_research(user_id: str, symbol: str):
     finally:
         with _ticker_state_lock:
             _user_ticker_states[user_id]["running"] = False
+        try:
+            os.remove(os.path.join(_user_data_dir(user_id), "ticker_running.json"))
+        except Exception:
+            pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1040,7 +1176,7 @@ LOGIN_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Intelligent Investor — Sign In</title>
+<title>Terminal Investor — Sign In</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Segoe UI',system-ui,sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
@@ -1062,7 +1198,7 @@ LOGIN_HTML = """<!DOCTYPE html>
 </style>
 </head>
 <body>
-<div class="logo">💼 Intelligent Investor</div>
+<div class="logo"><img src="/logo.png" alt="Terminal Investor" style="max-height:64px;width:auto;"></div>
 <div class="tagline">Graham–Buffett Value Screener · AI-Powered Analysis</div>
 <div class="card">
   <div class="trial-badge">🎁 <strong>7-day free trial</strong> — no credit card required. Start screening today.</div>
@@ -1157,6 +1293,34 @@ def _subscription_banner_js(plan_info: dict) -> str:
 # 14. Routes — protected API layer
 # ─────────────────────────────────────────────────────────────────────────────
 
+_PREVIEW_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "preview")
+
+@app.route("/favicon.png")
+@app.route("/favicon.ico")
+def favicon():
+    """Serve the app favicon from preview/favicon.png (drop your file there to update it)."""
+    png = os.path.join(_PREVIEW_DIR, "favicon.png")
+    if os.path.exists(png):
+        return send_file(png, mimetype="image/png")
+    return "", 204
+
+@app.route("/favicon.svg")
+def favicon_svg():
+    """Serve the SVG favicon from preview/favicon.svg."""
+    svg = os.path.join(_PREVIEW_DIR, "favicon.svg")
+    if os.path.exists(svg):
+        return send_file(svg, mimetype="image/svg+xml")
+    return "", 204
+
+@app.route("/logo.png")
+def logo_png():
+    """Serve the app logo from preview/logo.png."""
+    png = os.path.join(_PREVIEW_DIR, "logo.png")
+    if os.path.exists(png):
+        return send_file(png, mimetype="image/png")
+    return "", 204
+
+
 @app.route("/")
 def index():
     """Serve the main SaaS UI (self-contained preview/index.html)."""
@@ -1210,7 +1374,7 @@ def logout_page():
 def api_status():
     user_id = getattr(g, "user_id", None)
     nxt   = _next_run_time(user_id)
-    delta = nxt - datetime.now()
+    delta = nxt - datetime.now(_TZ_EST)
     h, r  = divmod(int(delta.total_seconds()), 3600)
     m     = r // 60
     plan_info = _get_plan_info(user_id)
@@ -1219,8 +1383,8 @@ def api_status():
     duration_secs = None
     if run_state.get("finished_at") and run_state.get("started_at"):
         try:
-            started  = datetime.fromisoformat(run_state["started_at"])
-            finished = datetime.fromisoformat(run_state["finished_at"])
+            started  = datetime.fromisoformat(run_state["started_at"].replace("Z", "+00:00"))
+            finished = datetime.fromisoformat(run_state["finished_at"].replace("Z", "+00:00"))
             duration_secs = max(0, int((finished - started).total_seconds()))
         except Exception:
             pass
@@ -1236,10 +1400,10 @@ def api_status():
     _day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     _day_labels = " · ".join(_day_names[d] for d in sorted(_sched_days) if 0 <= d <= 6)
     _sched_enabled = bool(_sched_cfg.get("enabled", True))
-    schedule_fmt = f"{_day_labels} at {_sched_hour:02d}:{_sched_minute:02d}" if _sched_enabled else "Scheduler OFF"
+    schedule_fmt = f"{_day_labels} at {_sched_hour:02d}:{_sched_minute:02d} EST" if _sched_enabled else "Scheduler OFF"
     return jsonify({
         "run_state":       run_state,
-        "next_run_fmt":    nxt.strftime("%a %b %-d at %-I:%M %p") if _sched_enabled else None,
+        "next_run_fmt":    (nxt.strftime("%a %b %-d at %-I:%M %p") + " EST") if _sched_enabled else None,
         "schedule_fmt":    schedule_fmt,
         "schedule_enabled": _sched_enabled,
         "countdown":       f"{h}h {m}m" if _sched_enabled else None,
@@ -1443,13 +1607,6 @@ def api_etf_run():
                 try: models.decrement_daily_run_count(user_id)
                 except Exception: pass
             return jsonify({"ok": False, "message": "ETF screen already running for your account"}), 409
-        # Also refuse if the global execution lock is held (another user's screen running)
-        if not _etf_exec_lock.acquire(blocking=False):
-            if _DB_AVAILABLE:
-                try: models.decrement_daily_run_count(user_id)
-                except Exception: pass
-            return jsonify({"ok": False, "message": "ETF screen busy — try again in a moment"}), 409
-        _etf_exec_lock.release()
         _user_etf_states[user_id] = {"running": True, "error": None, "started_at": None}
     threading.Thread(target=_run_etf_screen, args=(user_id,), daemon=True).start()
     return jsonify({"ok": True})
@@ -1472,6 +1629,13 @@ def api_etf_stop():
             models.decrement_daily_run_count(user_id)
         except Exception as _e:
             logger.warning("Could not decrement run count on ETF stop: %s", _e)
+    # Delete the running flag file immediately so the stale-check in
+    # api_etf_status() does not mistake the stopped run as still running.
+    if user_id:
+        try:
+            os.remove(os.path.join(_user_data_dir(user_id), "etf_running.json"))
+        except Exception:
+            pass
     logger.info("ETF screen stopped by user %s", user_id[:8] if user_id else "unknown")
     return jsonify({"ok": True})
 
@@ -1493,6 +1657,13 @@ def api_bond_stop():
             models.decrement_daily_run_count(user_id)
         except Exception as _e:
             logger.warning("Could not decrement run count on Bond stop: %s", _e)
+    # Delete the running flag file immediately so the stale-check in
+    # api_bond_status() does not mistake the stopped run as still running.
+    if user_id:
+        try:
+            os.remove(os.path.join(_user_data_dir(user_id), "bond_running.json"))
+        except Exception:
+            pass
     logger.info("Bond screen stopped by user %s", user_id[:8] if user_id else "unknown")
     return jsonify({"ok": True})
 
@@ -1547,6 +1718,18 @@ def api_stop_all():
 def api_etf_status():
     user_id = getattr(g, "user_id", None)
     state   = dict(_user_etf_states.get(user_id, _default_etf_state()))
+    if user_id and not state.get("running"):
+        rf = os.path.join(_user_data_dir(user_id), "etf_running.json")
+        try:
+            if os.path.exists(rf):
+                with open(rf) as _f:
+                    fd = json.load(_f)
+                started = datetime.fromisoformat(fd.get("started_at", "1970-01-01T00:00:00+00:00").replace("Z", "+00:00"))
+                if (datetime.now(timezone.utc) - started).total_seconds() < 1800:
+                    state["running"] = True
+                    state.setdefault("started_at", fd.get("started_at"))
+        except Exception:
+            pass
     results = _load_screener_results(_etf_results_file(user_id)) if user_id else None
     return jsonify({**state, "results": results})
 
@@ -1574,12 +1757,6 @@ def api_bond_run():
                 try: models.decrement_daily_run_count(user_id)
                 except Exception: pass
             return jsonify({"ok": False, "message": "Bond screen already running for your account"}), 409
-        if not _bond_exec_lock.acquire(blocking=False):
-            if _DB_AVAILABLE:
-                try: models.decrement_daily_run_count(user_id)
-                except Exception: pass
-            return jsonify({"ok": False, "message": "Bond screen busy — try again in a moment"}), 409
-        _bond_exec_lock.release()
         _user_bond_states[user_id] = {"running": True, "error": None, "started_at": None}
     threading.Thread(target=_run_bond_screen, args=(user_id,), daemon=True).start()
     return jsonify({"ok": True})
@@ -1590,6 +1767,18 @@ def api_bond_run():
 def api_bond_status():
     user_id = getattr(g, "user_id", None)
     state   = dict(_user_bond_states.get(user_id, _default_bond_state()))
+    if user_id and not state.get("running"):
+        rf = os.path.join(_user_data_dir(user_id), "bond_running.json")
+        try:
+            if os.path.exists(rf):
+                with open(rf) as _f:
+                    fd = json.load(_f)
+                started = datetime.fromisoformat(fd.get("started_at", "1970-01-01T00:00:00+00:00").replace("Z", "+00:00"))
+                if (datetime.now(timezone.utc) - started).total_seconds() < 1800:
+                    state["running"] = True
+                    state.setdefault("started_at", fd.get("started_at"))
+        except Exception:
+            pass
     results = _load_screener_results(_bond_results_file(user_id)) if user_id else None
     return jsonify({**state, "results": results})
 
@@ -1674,6 +1863,18 @@ def api_ticker_stop():
 def api_ticker_status():
     user_id = getattr(g, "user_id", None)
     state   = dict(_user_ticker_states.get(user_id, _default_ticker_state()))
+    if user_id and not state.get("running"):
+        rf = os.path.join(_user_data_dir(user_id), "ticker_running.json")
+        try:
+            if os.path.exists(rf):
+                with open(rf) as _f:
+                    fd = json.load(_f)
+                started = datetime.fromisoformat(fd.get("started_at", "1970-01-01T00:00:00+00:00").replace("Z", "+00:00"))
+                if (datetime.now(timezone.utc) - started).total_seconds() < 900:
+                    state["running"] = True
+                    state.setdefault("started_at", fd.get("started_at"))
+        except Exception:
+            pass
     result  = None
     # Only return a result if the last run succeeded (no error in state)
     if user_id and not state.get("error") and not state.get("running"):
@@ -1777,7 +1978,7 @@ def _scheduled_stock_screen(user_id: str):
             return
 
         logger.info("Scheduled stock screen triggered for user %s at %s",
-                    user_id, datetime.now().strftime("%H:%M:%S"))
+                    user_id, datetime.now(_TZ_EST).strftime("%H:%M:%S EST"))
         ok, msg = _start_agent(user_id=user_id, source="scheduled")
         if ok:
             logger.info("Scheduled screen started for user %s: %s", user_id, msg)

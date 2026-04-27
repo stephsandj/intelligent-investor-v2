@@ -6,7 +6,10 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Intelligent Investor V2 — Interactive Preview</title>
+<title>Terminal Investor</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/favicon.png">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -645,7 +648,7 @@
 
 <!-- ══ Nav ══ -->
 <nav class="nav-bar">
-  <div class="nav-logo" onclick="nav('landing')"><svg class="logo-icon" viewBox="0 0 24 24" width="20" height="20" style="display:inline-block;vertical-align:middle;margin-right:8px"><path d="M3 13h2v8H3zm4-8h2v16H7zm4-2h2v18h-2zm4 4h2v14h-2zm4-2h2v16h-2z" fill="currentColor"></path></svg> Intelligent Investor</div>
+  <div class="nav-logo" onclick="nav('landing')" style="cursor:pointer;"><img src="/logo.png" alt="Terminal Investor" style="max-height:36px;width:auto;vertical-align:middle;"></div>
   <div id="nav-auth-buttons" class="nav-right" style="gap:12px;">
     <button class="nav-tab" id="btn-login" onclick="showAuthModal('signin')">Login</button>
     <button class="nav-tab" id="btn-signup" onclick="showAuthModal('register')">Sign Up</button>
@@ -1164,7 +1167,7 @@
       </div>
 
       <!-- Summary stats bar -->
-      <div class="stats-bar">
+      <div class="stats-bar" id="stock-stats-bar">
         <div class="stat-cell"><div class="stat-num" id="stat-universe">—</div><div class="stat-lbl">Stocks Screened</div></div>
         <div class="stat-cell"><div class="stat-num" id="stat-down">—</div><div class="stat-lbl">Candidates</div></div>
         <div class="stat-cell"><div class="stat-num" id="stat-analyzed">—</div><div class="stat-lbl">Analyzed</div></div>
@@ -1578,7 +1581,7 @@
                   <span style="color:var(--muted);font-size:1.1rem;font-weight:700">:</span>
                   <input type="number" id="settings-sched-min" min="0" max="59" placeholder="00"
                     style="width:66px;padding:8px 10px;border:1px solid var(--border);border-radius:7px;background:var(--surface2);color:var(--text);font-size:.9rem;text-align:center;outline:none">
-                  <span style="color:var(--muted);font-size:.8rem">local time</span>
+                  <span style="color:var(--muted);font-size:.8rem">EST</span>
                 </div>
               </div>
               <div style="margin-bottom:20px">
@@ -1937,6 +1940,29 @@ var _currentSub    = null;   // subscription portion of /auth/me
 var _currentFeats  = {};     // features portion of /auth/me — always an object so property access never throws
 var _emailVerified      = true;   // false = user is logged in but email not yet verified
 var _isRunning          = false;  // true only for user-triggered (manual) runs
+// ── EST timezone helpers — all user-facing times displayed in Eastern ──────────
+const _TZ_EST = "America/New_York";
+// Normalise a timestamp string: bare ISO strings without offset are treated as UTC
+// (append Z if no Z / +offset already present) so new Date() parses them correctly.
+function _toUtcDate(dt) {
+  if (dt instanceof Date) return dt;
+  if (typeof dt === 'string' && dt.length >= 10 && !/Z$|[+-]\d{2}:\d{2}$/.test(dt)) {
+    dt = dt + 'Z';  // treat naive ISO strings as UTC, not local browser time
+  }
+  return new Date(dt);
+}
+function _estTime(dt, opts) {
+  const d = _toUtcDate(dt);
+  return d.toLocaleTimeString("en-US", Object.assign({ timeZone: _TZ_EST, hour:"numeric", minute:"2-digit" }, opts || {}));
+}
+function _estDate(dt, opts) {
+  const d = _toUtcDate(dt);
+  return d.toLocaleDateString("en-US", Object.assign({ timeZone: _TZ_EST }, opts || {}));
+}
+function _estFull(dt, opts) {
+  const d = _toUtcDate(dt);
+  return d.toLocaleString("en-US", Object.assign({ timeZone: _TZ_EST }, opts || {}));
+}
 var _scheduledRunActive = false;  // true when a background scheduled run is in progress
 var _prevScheduledRunActive = false;  // track previous state to detect transitions
 var _scheduledRunMonitorInterval = null;  // background monitor for scheduled runs
@@ -3195,7 +3221,7 @@ async function _loadDashboard() {
   const statusText = document.getElementById('run-status-text');
   if (statusText && !_isRunning) {
     statusText.textContent = state.finished_at
-      ? 'Last run: ' + new Date(state.finished_at).toLocaleTimeString()
+      ? 'Last run: ' + _estTime(state.finished_at) + ' EST'
       : 'Ready to run';
   }
 
@@ -3211,13 +3237,15 @@ async function _loadDashboard() {
   if (kpiLastRun) {
     if (state.running) {
       kpiLastRun.textContent = 'Running…';
-    } else if (state.finished_at) {
-      const d = new Date(state.finished_at);
-      kpiLastRun.textContent = d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
-      if (kpiLastSub) kpiLastSub.textContent = d.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+      if (kpiLastSub) kpiLastSub.textContent = '';
+    } else if (state.last_completed_at) {
+      // Only show the time of the last *completed* run — stopped/failed runs are excluded
+      const d = _toUtcDate(state.last_completed_at);
+      kpiLastRun.textContent = _estTime(d) + ' EST';
+      if (kpiLastSub) kpiLastSub.textContent = _estDate(d, {weekday:'short', month:'short', day:'numeric'});
     } else {
       kpiLastRun.textContent = '—';
-      if (kpiLastSub) kpiLastSub.textContent = 'No runs yet';
+      if (kpiLastSub) kpiLastSub.textContent = 'No completed runs yet';
     }
   }
   // Next Run card
@@ -3246,6 +3274,9 @@ async function _loadDashboard() {
     const ds = data.duration_secs;
     statDur.textContent = ds >= 60 ? Math.floor(ds/60) + 'm ' + (ds%60) + 's' : ds + 's';
   }
+  // Show the stocks stats bar only when there is real data to display
+  const _sBar = document.getElementById('stock-stats-bar');
+  if (_sBar && (summary.universe || data.duration_secs != null)) _sBar.style.display = '';
 
   // ── Picks wrap — only render when not actively running ────
   if (!_isRunning) renderPicks(data.last_picks || [], data.snap_picks || []);
@@ -3706,48 +3737,47 @@ function generateAnalysisHTML(pick, accent) {
     </div>
   `;
 
-  // Graham & Buffett Criteria Sections
-  //   const grahamCriteria = pick.checklist || [];
-  //   const buffettCriteria = pick.buffett_checklist || [];
-  // 
-  //   if (grahamCriteria.length > 0) {
-  //     html += `
-  //     <div class="analysis-section">
-  //       <div class="analysis-section-title">GRAHAM ${grahamCriteria.length}-CRITERIA</div>
-  //       <div class="analysis-checklist">
-  //         ${grahamCriteria.map(c => `
-  //           <div class="analysis-checklist-row">
-  //             <div class="analysis-checklist-criterion">${c.criterion || c.label || ''}</div>
-  //             <div class="analysis-checklist-detail">${c.detail || c.desc || ''}</div>
-  //             <div class="analysis-checklist-result ${(c.status || '').toLowerCase()}">
-  //               ${c.status || '—'}
-  //             </div>
-  //           </div>
-  //         `).join('')}
-  //       </div>
-  //     </div>
-  //     `;
-  //   }
-  // 
-  //   if (buffettCriteria.length > 0) {
-  //     html += `
-  //     <div class="analysis-section">
-  //       <div class="analysis-section-title">BUFFETT ${buffettCriteria.length}-CRITERIA</div>
-  //       <div class="analysis-checklist">
-  //         ${buffettCriteria.map(c => `
-  //           <div class="analysis-checklist-row">
-  //             <div class="analysis-checklist-criterion">${c.criterion || c.label || ''}</div>
-  //             <div class="analysis-checklist-detail">${c.detail || c.desc || ''}</div>
-  //             <div class="analysis-checklist-result ${(c.status || '').toLowerCase()}">
-  //               ${c.status || '—'}
-  //             </div>
-  //           </div>
-  //         `).join('')}
-  //       </div>
-  //     </div>
-  //     `;
-  //   }
-  // 
+    const grahamCriteria = pick.checklist || [];
+    const buffettCriteria = pick.buffett_checklist || [];
+  
+    if (grahamCriteria.length > 0) {
+      html += `
+      <div class="analysis-section">
+        <div class="analysis-section-title">GRAHAM ${grahamCriteria.length}-CRITERIA</div>
+        <div class="analysis-checklist">
+          ${grahamCriteria.map(c => `
+            <div class="analysis-checklist-row">
+              <div class="analysis-checklist-criterion">${c.criterion || c.label || ''}</div>
+              <div class="analysis-checklist-detail">${c.detail || c.desc || ''}</div>
+              <div class="analysis-checklist-result ${(c.status || '').toLowerCase()}">
+                ${c.status || '—'}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      `;
+    }
+  
+    if (buffettCriteria.length > 0) {
+      html += `
+      <div class="analysis-section">
+        <div class="analysis-section-title">BUFFETT ${buffettCriteria.length}-CRITERIA</div>
+        <div class="analysis-checklist">
+          ${buffettCriteria.map(c => `
+            <div class="analysis-checklist-row">
+              <div class="analysis-checklist-criterion">${c.criterion || c.label || ''}</div>
+              <div class="analysis-checklist-detail">${c.detail || c.desc || ''}</div>
+              <div class="analysis-checklist-result ${(c.status || '').toLowerCase()}">
+                ${c.status || '—'}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      `;
+    }
+  
   // Scores Breakdown Section
   html += `
     <div style="background: linear-gradient(135deg, var(--surface2) 0%, var(--surface) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 32px; margin-top: 28px;">
@@ -4553,8 +4583,8 @@ function _handleDailyLimitError(httpStatus, backendMsg) {
     // Calculate next reset time (midnight of next day in user's local timezone)
     const now = new Date();
     const nextReset = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
-    const timeStr = nextReset.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-    const dateStr = nextReset.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const timeStr = _estTime(nextReset) + ' EST';
+    const dateStr = _estDate(nextReset, { month: 'short', day: 'numeric', year: 'numeric' });
     const fullResetStr = dateStr + ' at ' + timeStr;
 
     console.log('[Daily Limit] Quota exceeded. Reset: ' + fullResetStr);
@@ -4664,6 +4694,16 @@ async function startRun() {
   _lockAgentConfig();
   _updateRunUI();
 
+  // Immediately reflect running state in the LAST RUN KPI card — no reload needed
+  const _kpiLastRun = document.getElementById('kpi-last-run');
+  const _kpiLastSub = document.getElementById('kpi-last-sub');
+  if (_kpiLastRun) _kpiLastRun.textContent = 'Running…';
+  if (_kpiLastSub) _kpiLastSub.textContent  = '';
+
+  // Hide the stocks stats bar immediately when run starts
+  const _stockStatsBar = document.getElementById('stock-stats-bar');
+  if (_stockStatsBar) _stockStatsBar.style.display = 'none';
+
   // ── Session keepalive — refresh token every 4 min while running ─
   if (_keepAliveInterval) clearInterval(_keepAliveInterval);
   _keepAliveInterval = setInterval(() => {
@@ -4728,8 +4768,24 @@ async function _pollRunStatus() {
       _finishRun(exitOk);
       if (exitOk) {
         showToast('Screen complete — picks ready!', 'success');
-        // Delay so the 100% completed step panel is visible briefly
-        setTimeout(() => _loadDashboard(), 1500);
+        // Render picks immediately from THIS response — the data is already here.
+        // This fixes the blank-on-first-run bug: the old code discarded this data
+        // and re-fetched 1500ms later, where a timing or auth edge case could
+        // return empty picks and render the empty-state card.
+        const _sp = data.snap_picks || [];
+        const _lp = data.last_picks  || [];
+        if (_sp.length > 0 || _lp.length > 0) {
+          renderPicks(_lp, _sp);
+        }
+        // Full dashboard reload — updates KPIs, stats bar, run count, etc.
+        // Also serves as a retry if picks weren’t in the immediate response.
+        setTimeout(() => _loadDashboard(), 2000);
+        // Final fallback: if picks-wrap is still showing empty state after 5 s,
+        // attempt one more load (handles slow I/O on first-ever run).
+        setTimeout(() => {
+          const _w = document.getElementById('picks-wrap');
+          if (_w && _w.querySelector('.empty-picks-card')) _loadDashboard();
+        }, 5000);
       }
       break;
     }
@@ -4788,12 +4844,12 @@ function _finishRun(completed) {
     if (_pill) _pill.classList.remove('running');
     if (_stxt) _stxt.textContent = 'Idle';
   } else {
-    // Stopped or failed — show blank placeholder (do not restore old picks)
-    hideAnalysis();  // Hide any analysis when run is stopped
-    const picksWrap = document.getElementById('picks-wrap');
-    if (picksWrap) picksWrap.innerHTML = '<div class="empty-picks-card"><div style="font-size:2.5rem">🔍</div><h3>No picks</h3><p>The screening run was stopped or did not complete. Click <strong>Run Now</strong> to start a new screen.</p></div>';
-    // Refresh the counter — the stop endpoint decremented the quota; reflect it now
-    _refreshRunCount();
+    // Stopped — reload the full dashboard so:
+    //   • LAST RUN card immediately shows the stop time instead of "Running…"
+    //   • Previous screening picks are restored (better UX than a blank card)
+    //   • Run-count quota reflects the refund from the stop endpoint
+    hideAnalysis();
+    _loadDashboard();
   }
 }
 
@@ -5070,7 +5126,7 @@ function _updateAgentLogsDisplay() {
     }
     if (meta) {
       const dt = new Date(timestamp);
-      meta.textContent = dt.toLocaleString();
+      meta.textContent = _estFull(dt) + " EST";
     }
   } catch (e) { /* parse error */ }
 }
@@ -5525,16 +5581,21 @@ function _stopCountdown(tab, label) {
 function _setEtfRunning(running) {
   const pill = _$('etf-status-pill'), txt = _$('etf-status-text');
   if (!pill) return;
+  const statsBar = _$('etf-stats-bar');
   if (running) {
     pill.className = 'screener-status-pill running';
     txt.innerHTML = '<span class="screener-spinner"></span>Running…';
     if (_$('etf-run-btn'))  _$('etf-run-btn').style.display  = 'none';
     if (_$('etf-stop-btn')) { _$('etf-stop-btn').style.display = ''; _$('etf-stop-btn').disabled = false; }
+    // Hide stats bar while run is in progress
+    if (statsBar) statsBar.style.display = 'none';
   } else {
     pill.className = 'screener-status-pill';
     txt.textContent = 'Idle';
     if (_$('etf-run-btn'))  _$('etf-run-btn').style.display  = '';
     if (_$('etf-stop-btn')) _$('etf-stop-btn').style.display = 'none';
+    // Restore stats bar if it has previous results (value is not placeholder '—')
+    if (statsBar && _$('etf-stat-screened')?.textContent !== '—') statsBar.style.display = '';
   }
 }
 
@@ -5593,7 +5654,7 @@ async function stopEtfScreen() {
           const etfWrap = _$('etf-results-wrap');
           if (etfWrap && etfWrap.querySelector('.run-panel')) etfWrap.innerHTML = _savedEtfHTML;
           showToast('ETF screen stopped.', 'warning');
-          setTimeout(() => _loadDashboard(), 500);
+          _refreshRunCount();  // lightweight — only refreshes run-count KPI, does NOT re-poll ETF/Bond status
         } else {
           showToast(data?.message || 'Could not stop ETF screen', 'error');
         }
@@ -5673,7 +5734,7 @@ function _renderEtfData(data) {
   if (_$('etf-stat-rf'))       _$('etf-stat-rf').textContent       = data.risk_free_rate != null ? data.risk_free_rate + '%' : '—';
   if (_$('etf-stat-dur'))      _$('etf-stat-dur').textContent      = data.duration_secs != null ? data.duration_secs + 's' : '—';
   if (data.run_date && _$('etf-last-run-lbl'))
-    _$('etf-last-run-lbl').textContent = 'Last run: ' + new Date(data.run_date).toLocaleString();
+    _$('etf-last-run-lbl').textContent = 'Last run: ' + _estFull(data.run_date) + ' EST';
   const top5 = data.top5 || (data.results || []).slice(0, 5);
   const all  = data.results || [];
   const wrap = _$('etf-results-wrap');
@@ -5690,16 +5751,21 @@ let _bondPoll = null;
 function _setBondRunning(running) {
   const pill = _$('bond-status-pill'), txt = _$('bond-status-text');
   if (!pill) return;
+  const statsBar = _$('bond-stats-bar');
   if (running) {
     pill.className = 'screener-status-pill running';
     txt.innerHTML = '<span class="screener-spinner"></span>Running…';
     if (_$('bond-run-btn'))  _$('bond-run-btn').style.display  = 'none';
     if (_$('bond-stop-btn')) { _$('bond-stop-btn').style.display = ''; _$('bond-stop-btn').disabled = false; }
+    // Hide stats bar while run is in progress
+    if (statsBar) statsBar.style.display = 'none';
   } else {
     pill.className = 'screener-status-pill';
     txt.textContent = 'Idle';
     if (_$('bond-run-btn'))  _$('bond-run-btn').style.display  = '';
     if (_$('bond-stop-btn')) _$('bond-stop-btn').style.display = 'none';
+    // Restore stats bar if it has previous results (value is not placeholder '—')
+    if (statsBar && _$('bond-stat-screened')?.textContent !== '—') statsBar.style.display = '';
   }
 }
 
@@ -5758,7 +5824,7 @@ async function stopBondScreen() {
           const bondWrap = _$('bond-results-wrap');
           if (bondWrap && bondWrap.querySelector('.run-panel')) bondWrap.innerHTML = _savedBondHTML;
           showToast('Bond screen stopped.', 'warning');
-          setTimeout(() => _loadDashboard(), 500);
+          _refreshRunCount();  // lightweight — only refreshes run-count KPI, does NOT re-poll ETF/Bond status
         } else {
           showToast(data?.message || 'Could not stop Bond screen', 'error');
         }
@@ -5838,7 +5904,7 @@ function _renderBondData(data) {
   if (_$('bond-stat-cpi'))      _$('bond-stat-cpi').textContent      = data.inflation_rate != null ? data.inflation_rate + '%' : '—';
   if (_$('bond-stat-dur'))      _$('bond-stat-dur').textContent      = data.duration_secs != null ? data.duration_secs + 's' : '—';
   if (data.run_date && _$('bond-last-run-lbl'))
-    _$('bond-last-run-lbl').textContent = 'Last run: ' + new Date(data.run_date).toLocaleString();
+    _$('bond-last-run-lbl').textContent = 'Last run: ' + _estFull(data.run_date) + ' EST';
   const top5 = data.top5 || (data.results || []).slice(0, 5);
   const all  = data.results || [];
   const wrap = _$('bond-results-wrap');
@@ -6019,7 +6085,7 @@ function _renderTickerResult(res) {
   const wrap   = _$('ticker-results-wrap');
   if (!wrap) return;
   const accent = gs(pick.grade).fg;
-  const runDate = res.run_date ? new Date(res.run_date).toLocaleString() : '';
+  const runDate = res.run_date ? _estFull(res.run_date) + ' EST' : '';
   wrap.innerHTML =
     `<div style="display:flex;justify-content:space-between;align-items:center;margin:0 0 16px;flex-wrap:wrap;gap:8px">` +
     `<div class="screener-section-title" style="margin:0">Research Result — ${pick.symbol}</div>` +
