@@ -1167,7 +1167,7 @@
       </div>
 
       <!-- Summary stats bar -->
-      <div class="stats-bar">
+      <div class="stats-bar" id="stock-stats-bar">
         <div class="stat-cell"><div class="stat-num" id="stat-universe">—</div><div class="stat-lbl">Stocks Screened</div></div>
         <div class="stat-cell"><div class="stat-num" id="stat-down">—</div><div class="stat-lbl">Candidates</div></div>
         <div class="stat-cell"><div class="stat-num" id="stat-analyzed">—</div><div class="stat-lbl">Analyzed</div></div>
@@ -3274,6 +3274,9 @@ async function _loadDashboard() {
     const ds = data.duration_secs;
     statDur.textContent = ds >= 60 ? Math.floor(ds/60) + 'm ' + (ds%60) + 's' : ds + 's';
   }
+  // Show the stocks stats bar only when there is real data to display
+  const _sBar = document.getElementById('stock-stats-bar');
+  if (_sBar && (summary.universe || data.duration_secs != null)) _sBar.style.display = '';
 
   // ── Picks wrap — only render when not actively running ────
   if (!_isRunning) renderPicks(data.last_picks || [], data.snap_picks || []);
@@ -4696,6 +4699,10 @@ async function startRun() {
   const _kpiLastSub = document.getElementById('kpi-last-sub');
   if (_kpiLastRun) _kpiLastRun.textContent = 'Running…';
   if (_kpiLastSub) _kpiLastSub.textContent  = '';
+
+  // Hide the stocks stats bar immediately when run starts
+  const _stockStatsBar = document.getElementById('stock-stats-bar');
+  if (_stockStatsBar) _stockStatsBar.style.display = 'none';
 
   // ── Session keepalive — refresh token every 4 min while running ─
   if (_keepAliveInterval) clearInterval(_keepAliveInterval);
