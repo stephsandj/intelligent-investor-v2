@@ -2191,7 +2191,7 @@ async function _restoreSession() {
           localStorage.removeItem('ii_saved_picks_html');
           localStorage.removeItem('ii_run_start_time');
           localStorage.removeItem('ii_config_at_run_start');
-          localStorage.removeItem('ii_countdown_end_stocks');
+          localStorage.removeItem('ii_countdown_start_stocks');
           if (exitCode === 0) {
             // Fetch and persist final logs so Agent Logs tab is populated
             await _fetchAndSaveFinalLogs();
@@ -2257,10 +2257,10 @@ function _restoreRunState() {
   _lockAgentConfig();
   _updateRunUI();
 
-  // Restore countdown timer from saved end time
-  const cdEndAt = parseInt(localStorage.getItem('ii_countdown_end_stocks') || '0');
-  if (cdEndAt > Date.now()) {
-    _cdEndAt['stocks'] = cdEndAt;
+  // Restore elapsed timer from saved start time
+  const cdStartAt = parseInt(localStorage.getItem('ii_countdown_start_stocks') || '0');
+  if (cdStartAt > 0) {
+    _cdStartAt['stocks'] = cdStartAt;
     if (_cdIntervals['stocks']) clearInterval(_cdIntervals['stocks']);
     _tickCountdown('stocks');
     _cdIntervals['stocks'] = setInterval(() => _tickCountdown('stocks'), 1000);
@@ -4740,14 +4740,8 @@ async function startRun() {
   // No more fixed timers — progress bar is updated by _updateProgressFromLogs() as logs stream in
   // This ensures sync between visible progress and actual agent execution
 
-  // Start countdown based on screening mode
-  const _stockPeriodSecs = {
-    'daily100':480,'daily500':660,'weekly100':720,'weekly500':900,
-    'yearly100':900,'yearly500':1200,'dailyall':3600,'weeklyall':5400,
-    'yearlyall':5400,'value100':720,'value500':1200
-  };
-  const _stockCountSecs = _stockPeriodSecs[loserPeriod] || 480;
-  _startCountdown('stocks', _stockCountSecs);
+  // Start elapsed timer from now
+  _startCountdown('stocks');
 
   // Poll /api/status every 5 s to detect real completion
   _pollRunStatus();
@@ -4816,7 +4810,7 @@ function _finishRun(completed) {
   localStorage.removeItem('ii_saved_picks_html');
   localStorage.removeItem('ii_run_start_time');
   localStorage.removeItem('ii_config_at_run_start');
-  localStorage.removeItem('ii_countdown_end_stocks');
+  localStorage.removeItem('ii_countdown_start_stocks');
   clearTimeout(_runTimer);
   _stockStepTimers.forEach(clearTimeout);
   _stockStepTimers = [];
@@ -5537,12 +5531,12 @@ function _renderBondTable(results) {
 let _etfPoll = null;
 const _ETF_TOTAL_SECS  = 210;
 const _BOND_TOTAL_SECS = 150;
-let _cdEndAt = {};
+let _cdStartAt = {};
 let _cdIntervals = {};
 
-function _startCountdown(tab, totalSecs) {
-  _cdEndAt[tab] = Date.now() + totalSecs * 1000;
-  localStorage.setItem('ii_countdown_end_' + tab, _cdEndAt[tab].toString());
+function _startCountdown(tab, startedAtMs) {
+  _cdStartAt[tab] = startedAtMs || Date.now();
+  localStorage.setItem('ii_countdown_start_' + tab, _cdStartAt[tab].toString());
   if (_cdIntervals[tab]) clearInterval(_cdIntervals[tab]);
   _tickCountdown(tab);
   _cdIntervals[tab] = setInterval(() => _tickCountdown(tab), 1000);
@@ -5551,17 +5545,9 @@ function _startCountdown(tab, totalSecs) {
 function _tickCountdown(tab) {
   const el = _$(tab + '-countdown');
   if (!el) return;
-  const rem = Math.max(0, Math.round((_cdEndAt[tab] - Date.now()) / 1000));
-  if (rem <= 0) {
-    el.textContent = '✓ Done';
-    el.className = 'countdown-badge done';
-    clearInterval(_cdIntervals[tab]);
-    _cdIntervals[tab] = null;
-    setTimeout(() => { if (el) el.className = 'countdown-badge hidden'; }, 4000);
-    return;
-  }
-  const mins = Math.floor(rem / 60), secs = rem % 60;
-  el.textContent = `⏱ ${mins}:${secs.toString().padStart(2,'0')} left`;
+  const elapsed = Math.max(0, Math.round((Date.now() - _cdStartAt[tab]) / 1000));
+  const mins = Math.floor(elapsed / 60), secs = elapsed % 60;
+  el.textContent = `⏱ ${mins}:${secs.toString().padStart(2,'0')}`;
   el.className = 'countdown-badge';
 }
 
@@ -5613,7 +5599,7 @@ async function runEtfScreen() {
   const mins = Math.round(_ETF_TOTAL_SECS / 60);
   showToast(`▶ Stock ETF screen started — est. ~${mins} min`, 'info');
   _setEtfRunning(true);
-  _startCountdown('etfs', _ETF_TOTAL_SECS);
+  _startCountdown('etfs');
 
   // ── Show progress panel, clear old results immediately ─────
   const etfWrap = _$('etf-results-wrap');
@@ -5699,7 +5685,7 @@ async function refreshEtfResults(silent) {
           if (elapsedSecs >= stepBreaks[i]) { resumeStep = i; break; }
         }
         _advanceStep('etf', resumeStep, pcts[resumeStep]);
-        _startCountdown('etfs', Math.max(15, _ETF_TOTAL_SECS - elapsedSecs));
+        _startCountdown('etfs', data.started_at ? new Date(data.started_at).getTime() : Date.now());
       }
     } else {
       const wasRunning = _$('etf-stop-btn') && _$('etf-stop-btn').style.display !== 'none';
@@ -5783,7 +5769,7 @@ async function runBondScreen() {
   const mins = Math.round(_BOND_TOTAL_SECS / 60);
   showToast(`▶ Bond ETF screen started — est. ~${mins} min`, 'info');
   _setBondRunning(true);
-  _startCountdown('bonds', _BOND_TOTAL_SECS);
+  _startCountdown('bonds');
 
   // ── Show progress panel, clear old results immediately ─────
   const bondWrap = _$('bond-results-wrap');
@@ -5868,7 +5854,7 @@ async function refreshBondResults(silent) {
           if (elapsedSecs >= stepBreaks[i]) { resumeStep = i; break; }
         }
         _advanceStep('bond', resumeStep, pcts[resumeStep]);
-        _startCountdown('bonds', Math.max(15, _BOND_TOTAL_SECS - elapsedSecs));
+        _startCountdown('bonds', data.started_at ? new Date(data.started_at).getTime() : Date.now());
       }
     } else {
       const wasRunning = _$('bond-stop-btn') && _$('bond-stop-btn').style.display !== 'none';
