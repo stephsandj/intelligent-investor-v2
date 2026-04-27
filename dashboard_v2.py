@@ -896,11 +896,9 @@ _user_bond_states: dict = {}  # user_id -> {running, error, started_at}
 _user_etf_cancel:  dict = {}  # user_id -> threading.Event
 _user_bond_cancel: dict = {}  # user_id -> threading.Event
 
-# Single execution locks prevent concurrent importlib.reload() calls on the same module,
-# which is not thread-safe. Only one ETF and one Bond screen can execute at a time
-# across all users. Each user still gets their own results file and state.
-_etf_exec_lock  = threading.Lock()
-_bond_exec_lock = threading.Lock()
+# Per-user state locks — protect the _user_etf_states / _user_bond_states dicts.
+# No global execution lock needed: run_screen() in both screener modules is fully
+# stateless (all variables are local), so concurrent runs across users are safe.
 _etf_state_lock  = threading.Lock()  # protects _user_etf_states dict
 _bond_state_lock = threading.Lock()  # protects _user_bond_states dict
 
@@ -935,23 +933,23 @@ def _run_etf_screen(user_id: str):
         logger.info("[etf-screen uid=%s] %s", user_id[:8], msg)
 
     try:
-        with _etf_exec_lock:  # single execution at a time (importlib.reload is not thread-safe)
-            try:
-                import importlib, growth_etf_screener as m
-                importlib.reload(m)
-                data = m.run_screen(on_progress=_progress)
-                if cancel_ev.is_set():
-                    return  # finally block below still runs — cleans up file + state
-                if data.get("results") and len(data["results"]) > 0:
-                    with open(_etf_results_file(user_id), "w") as f:
-                        json.dump(data, f, indent=2)
-                else:
-                    with _etf_state_lock:
-                        _user_etf_states[user_id]["error"] = "Run returned 0 results — possible network issue."
-            except Exception as e:
-                if not cancel_ev.is_set():
-                    with _etf_state_lock:
-                        _user_etf_states[user_id]["error"] = str(e)
+        # No global lock needed — growth_etf_screener.run_screen() is fully stateless
+        # (all variables are local to the function). Concurrent runs across users are safe.
+        import growth_etf_screener as m
+        try:
+            data = m.run_screen(on_progress=_progress)
+            if cancel_ev.is_set():
+                pass  # finally block below still runs — cleans up file + state
+            elif data.get("results") and len(data["results"]) > 0:
+                with open(_etf_results_file(user_id), "w") as f:
+                    json.dump(data, f, indent=2)
+            else:
+                with _etf_state_lock:
+                    _user_etf_states[user_id]["error"] = "Run returned 0 results — possible network issue."
+        except Exception as e:
+            if not cancel_ev.is_set():
+                with _etf_state_lock:
+                    _user_etf_states[user_id]["error"] = str(e)
     finally:
         # Always clean up — whether run completed, was cancelled, or raised an exception.
         # Without this, etf_running.json stays on disk and the stale-check in
@@ -981,23 +979,23 @@ def _run_bond_screen(user_id: str):
         logger.info("[bond-screen uid=%s] %s", user_id[:8], msg)
 
     try:
-        with _bond_exec_lock:
-            try:
-                import importlib, bond_etf_screener as m
-                importlib.reload(m)
-                data = m.run_screen(on_progress=_progress)
-                if cancel_ev.is_set():
-                    return  # finally block below still runs — cleans up file + state
-                if data.get("results") and len(data["results"]) > 0:
-                    with open(_bond_results_file(user_id), "w") as f:
-                        json.dump(data, f, indent=2)
-                else:
-                    with _bond_state_lock:
-                        _user_bond_states[user_id]["error"] = "Run returned 0 results — possible network issue."
-            except Exception as e:
-                if not cancel_ev.is_set():
-                    with _bond_state_lock:
-                        _user_bond_states[user_id]["error"] = str(e)
+        # No global lock needed — bond_etf_screener.run_screen() is fully stateless
+        # (all variables are local to the function). Concurrent runs across users are safe.
+        import bond_etf_screener as m
+        try:
+            data = m.run_screen(on_progress=_progress)
+            if cancel_ev.is_set():
+                pass  # finally block below still runs — cleans up file + state
+            elif data.get("results") and len(data["results"]) > 0:
+                with open(_bond_results_file(user_id), "w") as f:
+                    json.dump(data, f, indent=2)
+            else:
+                with _bond_state_lock:
+                    _user_bond_states[user_id]["error"] = "Run returned 0 results — possible network issue."
+        except Exception as e:
+            if not cancel_ev.is_set():
+                with _bond_state_lock:
+                    _user_bond_states[user_id]["error"] = str(e)
     finally:
         # Always clean up — whether run completed, was cancelled, or raised an exception.
         # Without this, bond_running.json stays on disk and the stale-check in
@@ -1563,13 +1561,6 @@ def api_etf_run():
                 try: models.decrement_daily_run_count(user_id)
                 except Exception: pass
             return jsonify({"ok": False, "message": "ETF screen already running for your account"}), 409
-        # Also refuse if the global execution lock is held (another user's screen running)
-        if not _etf_exec_lock.acquire(blocking=False):
-            if _DB_AVAILABLE:
-                try: models.decrement_daily_run_count(user_id)
-                except Exception: pass
-            return jsonify({"ok": False, "message": "ETF screen busy — try again in a moment"}), 409
-        _etf_exec_lock.release()
         _user_etf_states[user_id] = {"running": True, "error": None, "started_at": None}
     threading.Thread(target=_run_etf_screen, args=(user_id,), daemon=True).start()
     return jsonify({"ok": True})
@@ -1720,12 +1711,6 @@ def api_bond_run():
                 try: models.decrement_daily_run_count(user_id)
                 except Exception: pass
             return jsonify({"ok": False, "message": "Bond screen already running for your account"}), 409
-        if not _bond_exec_lock.acquire(blocking=False):
-            if _DB_AVAILABLE:
-                try: models.decrement_daily_run_count(user_id)
-                except Exception: pass
-            return jsonify({"ok": False, "message": "Bond screen busy — try again in a moment"}), 409
-        _bond_exec_lock.release()
         _user_bond_states[user_id] = {"running": True, "error": None, "started_at": None}
     threading.Thread(target=_run_bond_screen, args=(user_id,), daemon=True).start()
     return jsonify({"ok": True})
