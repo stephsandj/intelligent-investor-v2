@@ -5571,16 +5571,21 @@ function _stopCountdown(tab, label) {
 function _setEtfRunning(running) {
   const pill = _$('etf-status-pill'), txt = _$('etf-status-text');
   if (!pill) return;
+  const statsBar = _$('etf-stats-bar');
   if (running) {
     pill.className = 'screener-status-pill running';
     txt.innerHTML = '<span class="screener-spinner"></span>Running…';
     if (_$('etf-run-btn'))  _$('etf-run-btn').style.display  = 'none';
     if (_$('etf-stop-btn')) { _$('etf-stop-btn').style.display = ''; _$('etf-stop-btn').disabled = false; }
+    // Hide stats bar while run is in progress
+    if (statsBar) statsBar.style.display = 'none';
   } else {
     pill.className = 'screener-status-pill';
     txt.textContent = 'Idle';
     if (_$('etf-run-btn'))  _$('etf-run-btn').style.display  = '';
     if (_$('etf-stop-btn')) _$('etf-stop-btn').style.display = 'none';
+    // Restore stats bar if it has previous results (value is not placeholder '—')
+    if (statsBar && _$('etf-stat-screened')?.textContent !== '—') statsBar.style.display = '';
   }
 }
 
@@ -5736,16 +5741,21 @@ let _bondPoll = null;
 function _setBondRunning(running) {
   const pill = _$('bond-status-pill'), txt = _$('bond-status-text');
   if (!pill) return;
+  const statsBar = _$('bond-stats-bar');
   if (running) {
     pill.className = 'screener-status-pill running';
     txt.innerHTML = '<span class="screener-spinner"></span>Running…';
     if (_$('bond-run-btn'))  _$('bond-run-btn').style.display  = 'none';
     if (_$('bond-stop-btn')) { _$('bond-stop-btn').style.display = ''; _$('bond-stop-btn').disabled = false; }
+    // Hide stats bar while run is in progress
+    if (statsBar) statsBar.style.display = 'none';
   } else {
     pill.className = 'screener-status-pill';
     txt.textContent = 'Idle';
     if (_$('bond-run-btn'))  _$('bond-run-btn').style.display  = '';
     if (_$('bond-stop-btn')) _$('bond-stop-btn').style.display = 'none';
+    // Restore stats bar if it has previous results (value is not placeholder '—')
+    if (statsBar && _$('bond-stat-screened')?.textContent !== '—') statsBar.style.display = '';
   }
 }
 
