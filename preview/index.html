@@ -2132,12 +2132,22 @@ document.addEventListener('click', function(e) {
 
 // ── Session restore on page load ───────────────────────────────────
 async function _restoreSession() {
+  // Pick up payment-success flag stored before the clean reload
+  if (sessionStorage.getItem('ii_payment_success') === '1') {
+    sessionStorage.removeItem('ii_payment_success');
+    window._stripePaymentSuccess = true;
+  }
+
   // Handle email verification redirect params
   const params = new URLSearchParams(window.location.search);
   if (params.get('payment_success') === '1') {
+    // Store flag in sessionStorage, clear URL, then do ONE clean reload.
+    // This eliminates the blank-page flash: the reloaded page starts fresh
+    // (no Stripe URL param) and picks up the flag from sessionStorage below.
+    sessionStorage.setItem('ii_payment_success', '1');
     history.replaceState({}, '', '/');
-    // After session restore below, we'll navigate to account page — flag it
-    window._stripePaymentSuccess = true;
+    window.location.reload();
+    return;
   } else if (params.get('payment_cancelled') === '1') {
     history.replaceState({}, '', '/');
     setTimeout(() => showToast('Checkout cancelled — no charge was made.', 'info'), 600);
@@ -2173,11 +2183,12 @@ async function _restoreSession() {
 
     _emailVerified = true;
 
-    // Stripe redirect: always land on the billing page and confirm payment
+    // Stripe redirect: land on Stock Screener and confirm payment
     if (window._stripePaymentSuccess) {
       window._stripePaymentSuccess = false;
-      nav('account');
-      setTimeout(() => showToast('🎉 Payment successful — your plan has been upgraded!', 'success'), 600);
+      nav('dashboard');
+      sidebarNav('stocks');
+      setTimeout(() => showToast('🎉 Payment successful — your plan is now active!', 'success'), 500);
       return;
     }
 
