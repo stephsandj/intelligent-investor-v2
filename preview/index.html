@@ -2134,7 +2134,14 @@ document.addEventListener('click', function(e) {
 async function _restoreSession() {
   // Handle email verification redirect params
   const params = new URLSearchParams(window.location.search);
-  if (params.get('verified') === '1') {
+  if (params.get('payment_success') === '1') {
+    history.replaceState({}, '', '/');
+    // After session restore below, we'll navigate to account page — flag it
+    window._stripePaymentSuccess = true;
+  } else if (params.get('payment_cancelled') === '1') {
+    history.replaceState({}, '', '/');
+    setTimeout(() => showToast('Checkout cancelled — no charge was made.', 'info'), 600);
+  } else if (params.get('verified') === '1') {
     history.replaceState({}, '', '/');
     setTimeout(() => showToast('Email verified! You can now sign in.', 'success'), 400);
   } else if (params.get('already_verified') === '1') {
@@ -2165,6 +2172,15 @@ async function _restoreSession() {
     }
 
     _emailVerified = true;
+
+    // Stripe redirect: always land on the billing page and confirm payment
+    if (window._stripePaymentSuccess) {
+      window._stripePaymentSuccess = false;
+      nav('account');
+      setTimeout(() => showToast('🎉 Payment successful — your plan has been upgraded!', 'success'), 600);
+      return;
+    }
+
     const savedView    = localStorage.getItem('ii_active_view') || 'dashboard';
     const savedSection = _safeSection(localStorage.getItem('ii_sidebar_section') || 'stocks');
     if (savedView === 'account') {
@@ -3533,7 +3549,22 @@ function contactSales() {
      <label class="modal-label">Message</label>
      <textarea class="modal-select" id="sales-msg" rows="3" style="resize:vertical" placeholder="Tell us about your use case…"></textarea>`,
     [
-      { label: 'Send Inquiry', cls: 'btn-orange', action: () => { closeModal(); showToast('Inquiry sent! Our team will contact you within 24h.', 'success'); } },
+      { label: 'Send Inquiry', cls: 'btn-orange', action: async () => {
+          const name    = (document.getElementById('sales-name')?.value || '').trim();
+          const company = (document.getElementById('sales-company')?.value || '').trim();
+          const message = (document.getElementById('sales-msg')?.value || '').trim();
+          if (!name || !message) {
+            showToast('Please fill in your name and message.', 'error');
+            return;
+          }
+          closeModal();
+          const { ok, data } = await _api('POST', '/billing/enterprise-inquiry', { name, company, message });
+          if (ok) {
+            showToast('Inquiry sent! Our team will contact you within 24h.', 'success');
+          } else {
+            showToast(data?.message || 'Could not send inquiry — please try again.', 'error');
+          }
+      }},
       { label: 'Cancel', cls: 'btn-gray', action: closeModal },
     ]
   );

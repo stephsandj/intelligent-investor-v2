@@ -559,7 +559,7 @@ def cancel():
     GET /billing/cancel
     Stripe checkout cancel redirect. Redirects user back to the dashboard.
     """
-    return redirect("/")
+    return redirect("/?payment_cancelled=1")
 
 
 # Destination for all enterprise sales inquiries
