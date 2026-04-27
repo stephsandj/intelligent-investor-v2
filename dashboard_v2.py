@@ -1198,7 +1198,7 @@ LOGIN_HTML = """<!DOCTYPE html>
 </style>
 </head>
 <body>
-<div class="logo"><img src="/logo.png" alt="Terminal Investor" style="max-height:64px;width:auto;"></div>
+<div class="logo"><img src="/logo.png" alt="Terminal Investor" style="max-height:56px;max-width:260px;width:auto;"></div>
 <div class="tagline">Graham–Buffett Value Screener · AI-Powered Analysis</div>
 <div class="card">
   <div class="trial-badge">🎁 <strong>7-day free trial</strong> — no credit card required. Start screening today.</div>

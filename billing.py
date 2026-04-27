@@ -21,7 +21,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, g, jsonify, request, redirect
 
 from auth import auth_required
 import models
@@ -73,6 +73,7 @@ def _get_price_id(plan_name: str, billing_cycle: str) -> Optional[str]:
 _PLAN_NAME_TO_ID = {
     "starter": 2,
     "pro": 3,
+    "advanced": 6,
     "analyst": 4,
     "enterprise": 5,
 }
@@ -211,9 +212,9 @@ def handle_webhook(payload_bytes: bytes, sig_header: str) -> Tuple[bool, str]:
 
 def _handle_checkout_completed(session):
     """checkout.session.completed → store stripe_customer_id, set status=pending_payment."""
-    user_id = session.get("client_reference_id") or (
-        (session.get("metadata") or {}).get("user_id")
-    )
+    metadata_raw = getattr(session, "metadata", None)
+    metadata = metadata_raw.to_dict() if (metadata_raw and hasattr(metadata_raw, "to_dict")) else (metadata_raw or {})
+    user_id = getattr(session, "client_reference_id", None) or metadata.get("user_id")
     if not user_id:
         logger.warning("checkout.session.completed: no user_id in session metadata")
         return
@@ -227,8 +228,14 @@ def _handle_checkout_completed(session):
         )
         return
 
-    customer_id = session.get("customer")
-    stripe_sub_id = session.get("subscription")
+    customer_raw = getattr(session, "customer", None)
+    customer_id = getattr(customer_raw, "id", None) or (
+        customer_raw if isinstance(customer_raw, str) else None
+    )
+    sub_raw = getattr(session, "subscription", None)
+    stripe_sub_id = getattr(sub_raw, "id", None) or (
+        sub_raw if isinstance(sub_raw, str) else None
+    )
 
     with models.db_cursor() as cur:
         cur.execute(
@@ -439,6 +446,199 @@ def portal():
         return jsonify({"error": str(exc)}), 500
 
     return jsonify({"portal_url": portal_url})
+
+
+@billing_bp.route("/success", methods=["GET"])
+def success():
+    """
+    GET /billing/success?session_id=<session_id>
+    Stripe checkout success redirect. Retrieves session details and updates subscription if needed.
+    """
+    session_id = request.args.get("session_id", "").strip()
+    if not session_id:
+        logger.warning("success: missing session_id parameter")
+        return redirect("/")
+
+    try:
+        stripe.api_key = _stripe_secret()
+
+        # Retrieve the checkout session (this should work for completed sessions)
+        try:
+            session = stripe.checkout.Session.retrieve(
+                session_id,
+                expand=['customer', 'subscription']
+            )
+        except Exception as retrieve_err:
+            logger.warning(
+                "success: Could not retrieve session %s (may not be available yet): %s. "
+                "Relying on webhook to process payment.",
+                session_id, retrieve_err
+            )
+            # Even if we can't retrieve it now, redirect. Webhook will process it.
+            return redirect("/")
+
+        # Stripe SDK v5+ uses attribute access, not .get()
+        # Use getattr with fallback to safely read fields
+        user_id = (
+            getattr(session, "client_reference_id", None)
+            or (getattr(session, "metadata", None) or {}).get("user_id")
+        )
+        if not user_id:
+            logger.warning("success: session %s missing user_id", session_id)
+            return redirect("/")
+
+        # customer/subscription may be expanded objects; extract the ID string
+        customer_raw = getattr(session, "customer", None)
+        customer_id = getattr(customer_raw, "id", None) or (
+            customer_raw if isinstance(customer_raw, str) else None
+        )
+
+        sub_raw = getattr(session, "subscription", None)
+        stripe_sub_id = getattr(sub_raw, "id", None) or (
+            sub_raw if isinstance(sub_raw, str) else None
+        )
+
+        # metadata is a StripeObject in SDK v15 — convert to plain dict
+        metadata_raw = getattr(session, "metadata", None)
+        if metadata_raw is not None and hasattr(metadata_raw, "to_dict"):
+            metadata = metadata_raw.to_dict()
+        elif isinstance(metadata_raw, dict):
+            metadata = metadata_raw
+        else:
+            metadata = {}
+        plan_name = metadata.get("plan_name", "").lower()
+
+        # Look up plan_id from plan_name
+        plan_id = _PLAN_NAME_TO_ID.get(plan_name)
+
+        logger.info(
+            "success: session=%s user=%s plan=%s (id=%s) customer=%s sub=%s",
+            session_id, user_id, plan_name, plan_id, customer_id, stripe_sub_id
+        )
+
+        # Build UPDATE statement
+        from datetime import datetime, timezone
+        now_utc = datetime.now(timezone.utc)
+
+        update_fields = [
+            "stripe_customer_id = COALESCE(%s, stripe_customer_id)",
+            "stripe_sub_id = COALESCE(%s, stripe_sub_id)",
+            "status = 'active'",
+            "activated_at = %s",
+        ]
+        update_values = [customer_id, stripe_sub_id, now_utc]
+
+        if plan_id:
+            update_fields.append("plan_id = %s")
+            update_values.append(plan_id)
+
+        update_values.append(user_id)
+
+        with models.db_cursor() as cur:
+            cur.execute(
+                f"UPDATE subscriptions SET {', '.join(update_fields)} WHERE user_id = %s",
+                update_values,
+            )
+
+        logger.info(
+            "success: subscription updated for user %s — plan: %s, status: active",
+            user_id, plan_name,
+        )
+
+    except Exception as exc:
+        logger.error("success: Error processing session %s: %s", session_id, exc, exc_info=True)
+
+    # Redirect back to app — the ?payment_success=1 param triggers a toast and
+    # forces the account/billing page to display so the user sees their new plan.
+    return redirect("/?payment_success=1")
+
+
+@billing_bp.route("/cancel", methods=["GET"])
+def cancel():
+    """
+    GET /billing/cancel
+    Stripe checkout cancel redirect. Redirects user back to the dashboard.
+    """
+    return redirect("/")
+
+
+# Destination for all enterprise sales inquiries
+_ENTERPRISE_INQUIRY_TO = "propertymanagement314@gmail.com"
+
+
+@billing_bp.route("/enterprise-inquiry", methods=["POST"])
+@auth_required
+def enterprise_inquiry():
+    """
+    POST /billing/enterprise-inquiry
+    Submits an Enterprise Sales inquiry form and emails it to the sales address.
+    Body (JSON): { name, company, message }
+    """
+    from auth import _send_email, _smtp_configured
+
+    body    = request.get_json(silent=True) or {}
+    name    = str(body.get("name",    "")).strip()
+    company = str(body.get("company", "")).strip()
+    message = str(body.get("message", "")).strip()
+
+    if not message:
+        return jsonify({"error": "Please enter a message before sending."}), 400
+
+    # Pull the user's email from the auth context (g.user is set by @auth_required)
+    user_email = (g.user or {}).get("email", "") or ""
+
+    subject = "Enterprise Sales Inquiry"
+    if name or user_email:
+        label = name or user_email
+        subject = f"Enterprise Sales Inquiry — {label}"
+        if company:
+            subject = f"Enterprise Sales Inquiry — {label} ({company})"
+
+    html_body = f"""
+<html><body style="font-family:sans-serif;color:#333;max-width:620px;margin:0 auto">
+  <h2 style="color:#b45309">Enterprise Sales Inquiry</h2>
+  <table style="width:100%;border-collapse:collapse;font-size:14px">
+    <tr style="background:#fafafa">
+      <td style="padding:10px 14px;font-weight:600;width:160px;border:1px solid #e5e7eb">Name</td>
+      <td style="padding:10px 14px;border:1px solid #e5e7eb">{name or "—"}</td>
+    </tr>
+    <tr>
+      <td style="padding:10px 14px;font-weight:600;border:1px solid #e5e7eb">Company / Fund</td>
+      <td style="padding:10px 14px;border:1px solid #e5e7eb">{company or "—"}</td>
+    </tr>
+    <tr style="background:#fafafa">
+      <td style="padding:10px 14px;font-weight:600;border:1px solid #e5e7eb">Account email</td>
+      <td style="padding:10px 14px;border:1px solid #e5e7eb">{user_email or "—"}</td>
+    </tr>
+    <tr>
+      <td style="padding:10px 14px;font-weight:600;vertical-align:top;border:1px solid #e5e7eb">Message</td>
+      <td style="padding:10px 14px;white-space:pre-wrap;border:1px solid #e5e7eb">{message}</td>
+    </tr>
+  </table>
+  <p style="margin-top:20px;font-size:12px;color:#999">
+    Sent from Intelligent Investor SaaS — Enterprise inquiry form
+  </p>
+</body></html>
+"""
+
+    logger.info(
+        "enterprise-inquiry: user=%s name=%s company=%s smtp_configured=%s",
+        g.user_id, name, company, _smtp_configured(),
+    )
+
+    sent = _send_email(_ENTERPRISE_INQUIRY_TO, subject, html_body)
+    if sent:
+        logger.info("enterprise-inquiry: email delivered to %s", _ENTERPRISE_INQUIRY_TO)
+        return jsonify({"ok": True})
+
+    # SMTP not configured or send failed — log the full inquiry so it's not lost
+    logger.warning(
+        "enterprise-inquiry: email NOT sent (SMTP not configured or error). "
+        "Inquiry details — user=%s name=%s company=%s message=%r",
+        g.user_id, name, company, message,
+    )
+    # Still return OK to the user (we've logged it); let them know to follow up
+    return jsonify({"ok": True, "fallback": True})
 
 
 @billing_bp.route("/plans", methods=["GET"])
