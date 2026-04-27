@@ -901,29 +901,34 @@ def _run_etf_screen(user_id: str):
     def _progress(msg: str):
         logger.info("[etf-screen uid=%s] %s", user_id[:8], msg)
 
-    with _etf_exec_lock:  # single execution at a time (importlib.reload is not thread-safe)
-        try:
-            import importlib, growth_etf_screener as m
-            importlib.reload(m)
-            data = m.run_screen(on_progress=_progress)
-            if cancel_ev.is_set():
-                return
-            if data.get("results") and len(data["results"]) > 0:
-                with open(_etf_results_file(user_id), "w") as f:
-                    json.dump(data, f, indent=2)
-            else:
-                with _etf_state_lock:
-                    _user_etf_states[user_id]["error"] = "Run returned 0 results — possible network issue."
-        except Exception as e:
-            if not cancel_ev.is_set():
-                with _etf_state_lock:
-                    _user_etf_states[user_id]["error"] = str(e)
-    with _etf_state_lock:
-        _user_etf_states[user_id]["running"] = False
     try:
-        os.remove(os.path.join(_user_data_dir(user_id), "etf_running.json"))
-    except Exception:
-        pass
+        with _etf_exec_lock:  # single execution at a time (importlib.reload is not thread-safe)
+            try:
+                import importlib, growth_etf_screener as m
+                importlib.reload(m)
+                data = m.run_screen(on_progress=_progress)
+                if cancel_ev.is_set():
+                    return  # finally block below still runs — cleans up file + state
+                if data.get("results") and len(data["results"]) > 0:
+                    with open(_etf_results_file(user_id), "w") as f:
+                        json.dump(data, f, indent=2)
+                else:
+                    with _etf_state_lock:
+                        _user_etf_states[user_id]["error"] = "Run returned 0 results — possible network issue."
+            except Exception as e:
+                if not cancel_ev.is_set():
+                    with _etf_state_lock:
+                        _user_etf_states[user_id]["error"] = str(e)
+    finally:
+        # Always clean up — whether run completed, was cancelled, or raised an exception.
+        # Without this, etf_running.json stays on disk and the stale-check in
+        # api_etf_status() would wrongly return running=True for up to 30 minutes.
+        with _etf_state_lock:
+            _user_etf_states[user_id]["running"] = False
+        try:
+            os.remove(os.path.join(_user_data_dir(user_id), "etf_running.json"))
+        except Exception:
+            pass
 
 
 def _run_bond_screen(user_id: str):
@@ -942,29 +947,34 @@ def _run_bond_screen(user_id: str):
     def _progress(msg: str):
         logger.info("[bond-screen uid=%s] %s", user_id[:8], msg)
 
-    with _bond_exec_lock:
-        try:
-            import importlib, bond_etf_screener as m
-            importlib.reload(m)
-            data = m.run_screen(on_progress=_progress)
-            if cancel_ev.is_set():
-                return
-            if data.get("results") and len(data["results"]) > 0:
-                with open(_bond_results_file(user_id), "w") as f:
-                    json.dump(data, f, indent=2)
-            else:
-                with _bond_state_lock:
-                    _user_bond_states[user_id]["error"] = "Run returned 0 results — possible network issue."
-        except Exception as e:
-            if not cancel_ev.is_set():
-                with _bond_state_lock:
-                    _user_bond_states[user_id]["error"] = str(e)
-    with _bond_state_lock:
-        _user_bond_states[user_id]["running"] = False
     try:
-        os.remove(os.path.join(_user_data_dir(user_id), "bond_running.json"))
-    except Exception:
-        pass
+        with _bond_exec_lock:
+            try:
+                import importlib, bond_etf_screener as m
+                importlib.reload(m)
+                data = m.run_screen(on_progress=_progress)
+                if cancel_ev.is_set():
+                    return  # finally block below still runs — cleans up file + state
+                if data.get("results") and len(data["results"]) > 0:
+                    with open(_bond_results_file(user_id), "w") as f:
+                        json.dump(data, f, indent=2)
+                else:
+                    with _bond_state_lock:
+                        _user_bond_states[user_id]["error"] = "Run returned 0 results — possible network issue."
+            except Exception as e:
+                if not cancel_ev.is_set():
+                    with _bond_state_lock:
+                        _user_bond_states[user_id]["error"] = str(e)
+    finally:
+        # Always clean up — whether run completed, was cancelled, or raised an exception.
+        # Without this, bond_running.json stays on disk and the stale-check in
+        # api_bond_status() would wrongly return running=True for up to 30 minutes.
+        with _bond_state_lock:
+            _user_bond_states[user_id]["running"] = False
+        try:
+            os.remove(os.path.join(_user_data_dir(user_id), "bond_running.json"))
+        except Exception:
+            pass
 
 
 def _run_ticker_research(user_id: str, symbol: str):
@@ -1549,6 +1559,13 @@ def api_etf_stop():
             models.decrement_daily_run_count(user_id)
         except Exception as _e:
             logger.warning("Could not decrement run count on ETF stop: %s", _e)
+    # Delete the running flag file immediately so the stale-check in
+    # api_etf_status() does not mistake the stopped run as still running.
+    if user_id:
+        try:
+            os.remove(os.path.join(_user_data_dir(user_id), "etf_running.json"))
+        except Exception:
+            pass
     logger.info("ETF screen stopped by user %s", user_id[:8] if user_id else "unknown")
     return jsonify({"ok": True})
 
@@ -1570,6 +1587,13 @@ def api_bond_stop():
             models.decrement_daily_run_count(user_id)
         except Exception as _e:
             logger.warning("Could not decrement run count on Bond stop: %s", _e)
+    # Delete the running flag file immediately so the stale-check in
+    # api_bond_status() does not mistake the stopped run as still running.
+    if user_id:
+        try:
+            os.remove(os.path.join(_user_data_dir(user_id), "bond_running.json"))
+        except Exception:
+            pass
     logger.info("Bond screen stopped by user %s", user_id[:8] if user_id else "unknown")
     return jsonify({"ok": True})
 

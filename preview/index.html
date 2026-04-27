@@ -5631,7 +5631,7 @@ async function stopEtfScreen() {
           const etfWrap = _$('etf-results-wrap');
           if (etfWrap && etfWrap.querySelector('.run-panel')) etfWrap.innerHTML = _savedEtfHTML;
           showToast('ETF screen stopped.', 'warning');
-          setTimeout(() => _loadDashboard(), 500);
+          _refreshRunCount();  // lightweight — only refreshes run-count KPI, does NOT re-poll ETF/Bond status
         } else {
           showToast(data?.message || 'Could not stop ETF screen', 'error');
         }
@@ -5796,7 +5796,7 @@ async function stopBondScreen() {
           const bondWrap = _$('bond-results-wrap');
           if (bondWrap && bondWrap.querySelector('.run-panel')) bondWrap.innerHTML = _savedBondHTML;
           showToast('Bond screen stopped.', 'warning');
-          setTimeout(() => _loadDashboard(), 500);
+          _refreshRunCount();  // lightweight — only refreshes run-count KPI, does NOT re-poll ETF/Bond status
         } else {
           showToast(data?.message || 'Could not stop Bond screen', 'error');
         }
