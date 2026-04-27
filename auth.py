@@ -444,10 +444,10 @@ def register():
     resp = jsonify(resp_body)
     # Set HttpOnly cookies so the user is immediately logged in after registration
     resp.set_cookie("access_token",  tokens["access_token"],
-                    httponly=True, samesite="Lax", secure=False,
+                    httponly=True, samesite="Lax", secure=True,
                     max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60)
     resp.set_cookie("refresh_token", tokens["refresh_token"],
-                    httponly=True, samesite="Lax", secure=False,
+                    httponly=True, samesite="Lax", secure=True,
                     max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600)
     return resp, 201
 
@@ -488,6 +488,13 @@ def login():
     models.clear_failed_login_attempts(email)
     models.record_login_attempt(email, ip or "unknown", success=True, user_id=str(user["id"]))
     models.update_user_last_login(str(user["id"]), ip)
+
+    # Gate login behind email verification
+    if not user.get("email_verified"):
+        return jsonify({
+            "error": "Please verify your email address before logging in. Check your inbox for the verification link.",
+            "code": "email_not_verified"
+        }), 403
 
     subscription = models.get_user_subscription(str(user["id"]))
     sub_info = None
@@ -534,10 +541,10 @@ def login():
     })
     # Set HttpOnly cookies — more secure than localStorage
     resp.set_cookie("access_token",  tokens["access_token"],
-                    httponly=True, samesite="Lax", secure=False,
+                    httponly=True, samesite="Lax", secure=True,
                     max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60)
     resp.set_cookie("refresh_token", tokens["refresh_token"],
-                    httponly=True, samesite="Lax", secure=False,
+                    httponly=True, samesite="Lax", secure=True,
                     max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600)
     return resp
 
@@ -632,7 +639,7 @@ def reset_password():
 
     with models.db_cursor() as cur:
         cur.execute(
-            "UPDATE users SET password_hash = %s WHERE id = %s",
+            "UPDATE users SET password_hash = %s, email_verified = TRUE, email_verify_token = NULL WHERE id = %s",
             (password_hash, str(user["id"])),
         )
 
@@ -692,7 +699,7 @@ def refresh():
     )
     resp = jsonify({"access_token": new_access_token})
     resp.set_cookie("access_token", new_access_token,
-                    httponly=True, samesite="Lax", secure=False,
+                    httponly=True, samesite="Lax", secure=True,
                     max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60)
     return resp
 

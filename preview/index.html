@@ -1578,7 +1578,7 @@
                   <span style="color:var(--muted);font-size:1.1rem;font-weight:700">:</span>
                   <input type="number" id="settings-sched-min" min="0" max="59" placeholder="00"
                     style="width:66px;padding:8px 10px;border:1px solid var(--border);border-radius:7px;background:var(--surface2);color:var(--text);font-size:.9rem;text-align:center;outline:none">
-                  <span style="color:var(--muted);font-size:.8rem">local time</span>
+                  <span style="color:var(--muted);font-size:.8rem">EST</span>
                 </div>
               </div>
               <div style="margin-bottom:20px">
@@ -1937,6 +1937,20 @@ var _currentSub    = null;   // subscription portion of /auth/me
 var _currentFeats  = {};     // features portion of /auth/me — always an object so property access never throws
 var _emailVerified      = true;   // false = user is logged in but email not yet verified
 var _isRunning          = false;  // true only for user-triggered (manual) runs
+// ── EST timezone helpers — all user-facing times displayed in Eastern ──────────
+const _TZ_EST = "America/New_York";
+function _estTime(dt, opts) {
+  const d = (dt instanceof Date) ? dt : new Date(dt);
+  return d.toLocaleTimeString("en-US", Object.assign({ timeZone: _TZ_EST, hour:"numeric", minute:"2-digit" }, opts || {}));
+}
+function _estDate(dt, opts) {
+  const d = (dt instanceof Date) ? dt : new Date(dt);
+  return d.toLocaleDateString("en-US", Object.assign({ timeZone: _TZ_EST }, opts || {}));
+}
+function _estFull(dt, opts) {
+  const d = (dt instanceof Date) ? dt : new Date(dt);
+  return d.toLocaleString("en-US", Object.assign({ timeZone: _TZ_EST }, opts || {}));
+}
 var _scheduledRunActive = false;  // true when a background scheduled run is in progress
 var _prevScheduledRunActive = false;  // track previous state to detect transitions
 var _scheduledRunMonitorInterval = null;  // background monitor for scheduled runs
@@ -3195,7 +3209,7 @@ async function _loadDashboard() {
   const statusText = document.getElementById('run-status-text');
   if (statusText && !_isRunning) {
     statusText.textContent = state.finished_at
-      ? 'Last run: ' + new Date(state.finished_at).toLocaleTimeString()
+      ? 'Last run: ' + _estTime(state.finished_at) + ' EST'
       : 'Ready to run';
   }
 
@@ -3213,8 +3227,8 @@ async function _loadDashboard() {
       kpiLastRun.textContent = 'Running…';
     } else if (state.finished_at) {
       const d = new Date(state.finished_at);
-      kpiLastRun.textContent = d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
-      if (kpiLastSub) kpiLastSub.textContent = d.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+      kpiLastRun.textContent = _estTime(d) + ' EST';
+      if (kpiLastSub) kpiLastSub.textContent = _estDate(d, {weekday:'short', month:'short', day:'numeric'});
     } else {
       kpiLastRun.textContent = '—';
       if (kpiLastSub) kpiLastSub.textContent = 'No runs yet';
@@ -3706,48 +3720,47 @@ function generateAnalysisHTML(pick, accent) {
     </div>
   `;
 
-  // Graham & Buffett Criteria Sections
-  //   const grahamCriteria = pick.checklist || [];
-  //   const buffettCriteria = pick.buffett_checklist || [];
-  // 
-  //   if (grahamCriteria.length > 0) {
-  //     html += `
-  //     <div class="analysis-section">
-  //       <div class="analysis-section-title">GRAHAM ${grahamCriteria.length}-CRITERIA</div>
-  //       <div class="analysis-checklist">
-  //         ${grahamCriteria.map(c => `
-  //           <div class="analysis-checklist-row">
-  //             <div class="analysis-checklist-criterion">${c.criterion || c.label || ''}</div>
-  //             <div class="analysis-checklist-detail">${c.detail || c.desc || ''}</div>
-  //             <div class="analysis-checklist-result ${(c.status || '').toLowerCase()}">
-  //               ${c.status || '—'}
-  //             </div>
-  //           </div>
-  //         `).join('')}
-  //       </div>
-  //     </div>
-  //     `;
-  //   }
-  // 
-  //   if (buffettCriteria.length > 0) {
-  //     html += `
-  //     <div class="analysis-section">
-  //       <div class="analysis-section-title">BUFFETT ${buffettCriteria.length}-CRITERIA</div>
-  //       <div class="analysis-checklist">
-  //         ${buffettCriteria.map(c => `
-  //           <div class="analysis-checklist-row">
-  //             <div class="analysis-checklist-criterion">${c.criterion || c.label || ''}</div>
-  //             <div class="analysis-checklist-detail">${c.detail || c.desc || ''}</div>
-  //             <div class="analysis-checklist-result ${(c.status || '').toLowerCase()}">
-  //               ${c.status || '—'}
-  //             </div>
-  //           </div>
-  //         `).join('')}
-  //       </div>
-  //     </div>
-  //     `;
-  //   }
-  // 
+    const grahamCriteria = pick.checklist || [];
+    const buffettCriteria = pick.buffett_checklist || [];
+  
+    if (grahamCriteria.length > 0) {
+      html += `
+      <div class="analysis-section">
+        <div class="analysis-section-title">GRAHAM ${grahamCriteria.length}-CRITERIA</div>
+        <div class="analysis-checklist">
+          ${grahamCriteria.map(c => `
+            <div class="analysis-checklist-row">
+              <div class="analysis-checklist-criterion">${c.criterion || c.label || ''}</div>
+              <div class="analysis-checklist-detail">${c.detail || c.desc || ''}</div>
+              <div class="analysis-checklist-result ${(c.status || '').toLowerCase()}">
+                ${c.status || '—'}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      `;
+    }
+  
+    if (buffettCriteria.length > 0) {
+      html += `
+      <div class="analysis-section">
+        <div class="analysis-section-title">BUFFETT ${buffettCriteria.length}-CRITERIA</div>
+        <div class="analysis-checklist">
+          ${buffettCriteria.map(c => `
+            <div class="analysis-checklist-row">
+              <div class="analysis-checklist-criterion">${c.criterion || c.label || ''}</div>
+              <div class="analysis-checklist-detail">${c.detail || c.desc || ''}</div>
+              <div class="analysis-checklist-result ${(c.status || '').toLowerCase()}">
+                ${c.status || '—'}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      `;
+    }
+  
   // Scores Breakdown Section
   html += `
     <div style="background: linear-gradient(135deg, var(--surface2) 0%, var(--surface) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 32px; margin-top: 28px;">
@@ -4553,8 +4566,8 @@ function _handleDailyLimitError(httpStatus, backendMsg) {
     // Calculate next reset time (midnight of next day in user's local timezone)
     const now = new Date();
     const nextReset = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
-    const timeStr = nextReset.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-    const dateStr = nextReset.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const timeStr = _estTime(nextReset) + ' EST';
+    const dateStr = _estDate(nextReset, { month: 'short', day: 'numeric', year: 'numeric' });
     const fullResetStr = dateStr + ' at ' + timeStr;
 
     console.log('[Daily Limit] Quota exceeded. Reset: ' + fullResetStr);
@@ -4728,8 +4741,24 @@ async function _pollRunStatus() {
       _finishRun(exitOk);
       if (exitOk) {
         showToast('Screen complete — picks ready!', 'success');
-        // Delay so the 100% completed step panel is visible briefly
-        setTimeout(() => _loadDashboard(), 1500);
+        // Render picks immediately from THIS response — the data is already here.
+        // This fixes the blank-on-first-run bug: the old code discarded this data
+        // and re-fetched 1500ms later, where a timing or auth edge case could
+        // return empty picks and render the empty-state card.
+        const _sp = data.snap_picks || [];
+        const _lp = data.last_picks  || [];
+        if (_sp.length > 0 || _lp.length > 0) {
+          renderPicks(_lp, _sp);
+        }
+        // Full dashboard reload — updates KPIs, stats bar, run count, etc.
+        // Also serves as a retry if picks weren’t in the immediate response.
+        setTimeout(() => _loadDashboard(), 2000);
+        // Final fallback: if picks-wrap is still showing empty state after 5 s,
+        // attempt one more load (handles slow I/O on first-ever run).
+        setTimeout(() => {
+          const _w = document.getElementById('picks-wrap');
+          if (_w && _w.querySelector('.empty-picks-card')) _loadDashboard();
+        }, 5000);
       }
       break;
     }
@@ -5070,7 +5099,7 @@ function _updateAgentLogsDisplay() {
     }
     if (meta) {
       const dt = new Date(timestamp);
-      meta.textContent = dt.toLocaleString();
+      meta.textContent = _estFull(dt) + " EST";
     }
   } catch (e) { /* parse error */ }
 }
@@ -5673,7 +5702,7 @@ function _renderEtfData(data) {
   if (_$('etf-stat-rf'))       _$('etf-stat-rf').textContent       = data.risk_free_rate != null ? data.risk_free_rate + '%' : '—';
   if (_$('etf-stat-dur'))      _$('etf-stat-dur').textContent      = data.duration_secs != null ? data.duration_secs + 's' : '—';
   if (data.run_date && _$('etf-last-run-lbl'))
-    _$('etf-last-run-lbl').textContent = 'Last run: ' + new Date(data.run_date).toLocaleString();
+    _$('etf-last-run-lbl').textContent = 'Last run: ' + _estFull(data.run_date) + ' EST';
   const top5 = data.top5 || (data.results || []).slice(0, 5);
   const all  = data.results || [];
   const wrap = _$('etf-results-wrap');
@@ -5838,7 +5867,7 @@ function _renderBondData(data) {
   if (_$('bond-stat-cpi'))      _$('bond-stat-cpi').textContent      = data.inflation_rate != null ? data.inflation_rate + '%' : '—';
   if (_$('bond-stat-dur'))      _$('bond-stat-dur').textContent      = data.duration_secs != null ? data.duration_secs + 's' : '—';
   if (data.run_date && _$('bond-last-run-lbl'))
-    _$('bond-last-run-lbl').textContent = 'Last run: ' + new Date(data.run_date).toLocaleString();
+    _$('bond-last-run-lbl').textContent = 'Last run: ' + _estFull(data.run_date) + ' EST';
   const top5 = data.top5 || (data.results || []).slice(0, 5);
   const all  = data.results || [];
   const wrap = _$('bond-results-wrap');
@@ -6019,7 +6048,7 @@ function _renderTickerResult(res) {
   const wrap   = _$('ticker-results-wrap');
   if (!wrap) return;
   const accent = gs(pick.grade).fg;
-  const runDate = res.run_date ? new Date(res.run_date).toLocaleString() : '';
+  const runDate = res.run_date ? _estFull(res.run_date) + ' EST' : '';
   wrap.innerHTML =
     `<div style="display:flex;justify-content:space-between;align-items:center;margin:0 0 16px;flex-wrap:wrap;gap:8px">` +
     `<div class="screener-section-title" style="margin:0">Research Result — ${pick.symbol}</div>` +
