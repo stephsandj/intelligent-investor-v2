@@ -3234,13 +3234,15 @@ async function _loadDashboard() {
   if (kpiLastRun) {
     if (state.running) {
       kpiLastRun.textContent = 'Running…';
-    } else if (state.finished_at) {
-      const d = new Date(state.finished_at);
+      if (kpiLastSub) kpiLastSub.textContent = '';
+    } else if (state.last_completed_at) {
+      // Only show the time of the last *completed* run — stopped/failed runs are excluded
+      const d = _toUtcDate(state.last_completed_at);
       kpiLastRun.textContent = _estTime(d) + ' EST';
       if (kpiLastSub) kpiLastSub.textContent = _estDate(d, {weekday:'short', month:'short', day:'numeric'});
     } else {
       kpiLastRun.textContent = '—';
-      if (kpiLastSub) kpiLastSub.textContent = 'No runs yet';
+      if (kpiLastSub) kpiLastSub.textContent = 'No completed runs yet';
     }
   }
   // Next Run card

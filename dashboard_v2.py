@@ -282,7 +282,8 @@ _user_processes:  dict = {}                    # user_id -> subprocess.Popen han
 _user_log_files:  dict = {}                    # user_id -> path of the current agent_run_*.log file
 
 def _default_run_state() -> dict:
-    return {"running": False, "started_at": None, "finished_at": None, "exit_code": None, "run_summary": {}}
+    return {"running": False, "started_at": None, "finished_at": None, "exit_code": None,
+            "last_completed_at": None, "run_summary": {}}
 
 def _persist_run_state(user_id: str) -> None:
     """Write a user's finished-run state (including run summary stats) to disk for restart persistence."""
@@ -290,11 +291,13 @@ def _persist_run_state(user_id: str) -> None:
         state = _user_run_states.get(user_id, _default_run_state())
         with open(_user_state_file(user_id), "w") as f:
             json.dump({
-                "started_at":  state.get("started_at"),
-                "finished_at": state.get("finished_at"),
-                "exit_code":   state.get("exit_code"),
+                "started_at":        state.get("started_at"),
+                "finished_at":       state.get("finished_at"),
+                "exit_code":         state.get("exit_code"),
+                # Only the last *successful* completion time — shown in LAST RUN KPI card
+                "last_completed_at": state.get("last_completed_at"),
                 # Persist run summary so stats bar survives any restart
-                "run_summary": state.get("run_summary", {}),
+                "run_summary":       state.get("run_summary", {}),
             }, f, indent=2)
     except Exception as _e:
         logger.warning("Could not persist run state for %s: %s", user_id, _e)
@@ -310,13 +313,19 @@ def _load_persisted_run_states() -> None:
             try:
                 with open(sf) as f:
                     saved = json.load(f)
+                # One-time migration: if last_completed_at is absent (older state file)
+                # but finished_at is from a successful run (exit_code == 0), backfill it.
+                _last_completed = saved.get("last_completed_at")
+                if not _last_completed and saved.get("exit_code") == 0:
+                    _last_completed = saved.get("finished_at")
                 _user_run_states[uid] = {
-                    "running":     False,
-                    "started_at":  saved.get("started_at"),
-                    "finished_at": saved.get("finished_at"),
-                    "exit_code":   saved.get("exit_code"),
+                    "running":           False,
+                    "started_at":        saved.get("started_at"),
+                    "finished_at":       saved.get("finished_at"),
+                    "exit_code":         saved.get("exit_code"),
+                    "last_completed_at": _last_completed,
                     # Restore persisted run summary so stats bar works immediately after restart
-                    "run_summary": saved.get("run_summary", {}),
+                    "run_summary":       saved.get("run_summary", {}),
                 }
             except Exception as _e:
                 logger.warning("Could not load persisted run state for %s: %s", uid, _e)
@@ -344,11 +353,12 @@ def _get_run_state(user_id: "str | None" = None) -> dict:
                     try:
                         os.kill(pid, 0)  # signal 0: check existence only
                         state = {
-                            "running":     True,
-                            "started_at":  pid_data.get("started_at"),
-                            "finished_at": None,
-                            "exit_code":   None,
-                            "run_summary": state.get("run_summary", {}),
+                            "running":           True,
+                            "started_at":        pid_data.get("started_at"),
+                            "finished_at":       None,
+                            "exit_code":         None,
+                            "run_summary":       state.get("run_summary", {}),
+                            "last_completed_at": state.get("last_completed_at"),
                         }
                     except (ProcessLookupError, PermissionError, OSError):
                         try:
@@ -431,12 +441,16 @@ def _start_agent(user_id: "str | None" = None, source: str = "manual"):
         )
         _user_processes[user_id]  = proc
         _user_log_files[user_id]  = log_file_path
+        _prev_state = _user_run_states.get(user_id, _default_run_state())
         _user_run_states[user_id] = {
-            "running":     True,
-            "started_at":  datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "finished_at": None,
-            "exit_code":   None,
-            "source":      source,   # "manual" | "scheduled"
+            "running":           True,
+            "started_at":        datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "finished_at":       None,
+            "exit_code":         None,
+            "source":            source,   # "manual" | "scheduled"
+            # Carry forward last successful completion time so LAST RUN KPI card stays
+            # correct while the new run is in progress.
+            "last_completed_at": _prev_state.get("last_completed_at"),
         }
         # Write PID file so ALL Gunicorn workers can detect this run is active
         try:
@@ -453,12 +467,15 @@ def _start_agent(user_id: "str | None" = None, source: str = "manual"):
         with _run_lock:
             prev = _user_run_states.get(uid, {})
             _user_run_states[uid] = {
-                "running":     False,
-                "started_at":  prev.get("started_at"),
-                "finished_at": finished_at,
-                "exit_code":   p.returncode,
-                "run_summary": {},
-                "source":      prev.get("source", "manual"),  # preserve source after run ends
+                "running":           False,
+                "started_at":        prev.get("started_at"),
+                "finished_at":       finished_at,
+                "exit_code":         p.returncode,
+                "run_summary":       {},
+                "source":            prev.get("source", "manual"),  # preserve source after run ends
+                # Only update last_completed_at on a clean exit — stops/crashes keep the
+                # previous successful timestamp so LAST RUN always reflects a completed run.
+                "last_completed_at": finished_at if p.returncode == 0 else prev.get("last_completed_at"),
             }
             _user_processes.pop(uid, None)
         # After a successful run, parse the completion stats from the agent log
@@ -500,10 +517,12 @@ def _stop_agent(user_id: "str | None" = None):
         except Exception:
             pass
         _user_run_states[user_id] = {
-            "running":     False,
-            "started_at":  state.get("started_at"),
-            "finished_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "exit_code":   -1,
+            "running":           False,
+            "started_at":        state.get("started_at"),
+            "finished_at":       datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "exit_code":         -1,
+            # Preserve last successful completion time — stop events must not overwrite it
+            "last_completed_at": state.get("last_completed_at"),
         }
         _user_processes.pop(user_id, None)
     # Remove PID file on manual stop
