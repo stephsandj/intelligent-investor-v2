@@ -1293,6 +1293,26 @@ def _subscription_banner_js(plan_info: dict) -> str:
 # 14. Routes — protected API layer
 # ─────────────────────────────────────────────────────────────────────────────
 
+_PREVIEW_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "preview")
+
+@app.route("/favicon.png")
+@app.route("/favicon.ico")
+def favicon():
+    """Serve the app favicon from preview/favicon.png (drop your file there to update it)."""
+    png = os.path.join(_PREVIEW_DIR, "favicon.png")
+    if os.path.exists(png):
+        return send_file(png, mimetype="image/png")
+    return "", 204
+
+@app.route("/favicon.svg")
+def favicon_svg():
+    """Serve the SVG favicon from preview/favicon.svg."""
+    svg = os.path.join(_PREVIEW_DIR, "favicon.svg")
+    if os.path.exists(svg):
+        return send_file(svg, mimetype="image/svg+xml")
+    return "", 204
+
+
 @app.route("/")
 def index():
     """Serve the main SaaS UI (self-contained preview/index.html)."""
