@@ -13,6 +13,8 @@ import smtplib
 import math
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
+_TZ_EST = ZoneInfo("America/New_York")  # all user-facing times in Eastern
 from io import StringIO
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -1396,7 +1398,7 @@ class IntelligentInvestorPDFGenerator:
     def generate_report(self, stocks: List[Tuple], filename: str,
                         run_date: datetime = None) -> str:
         if run_date is None:
-            run_date = datetime.now()
+            run_date = datetime.now(_TZ_EST)
         date_str  = run_date.strftime('%B %-d, %Y')
         batch_lbl = f"Daily Screen  —  {run_date.strftime('%b %-d, %Y')}"
 
@@ -2456,7 +2458,7 @@ def send_email_confirmation(
         return False
 
     if run_date is None:
-        run_date = datetime.now()
+        run_date = datetime.now(_TZ_EST)
 
     date_str = run_date.strftime('%B %-d, %Y')
     n = len(stocks)
@@ -2554,7 +2556,7 @@ def send_email_confirmation(
 
 # ── MAIN ────────────────────────────────────────────────────────────────────────
 def main():
-    run_date = datetime.now()
+    run_date = datetime.now(_TZ_EST)
 
     # ── Load dashboard config ─────────────────────────────────────────────────
     cfg             = _load_agent_config()
@@ -2601,7 +2603,7 @@ def main():
     print("=" * 70)
     print("INTELLIGENT INVESTOR AGENT — DAILY SCREEN")
     print("Graham x Buffett Framework")
-    print(f"Run date    : {run_date.strftime('%B %-d, %Y  %H:%M:%S')}")
+    print(f"Run date    : {run_date.strftime('%B %-d, %Y  %H:%M:%S')} EST")
     print(f"Markets     : {markets_str}")
     print(f"Criteria    : {criteria_label}")
     print(f"Geography   : {geo_label}")
@@ -2832,7 +2834,7 @@ def main():
         # 1. No spaces or special characters (URL-safe)
         # 2. Chronological sort order by filename
         # 3. Seconds precision prevents duplicates from rapid consecutive runs
-        now = datetime.now()
+        now = datetime.now(_TZ_EST)
         timestamp = now.strftime('%Y%m%d_%H%M%S')
         filename = f"intelligent_investor_{timestamp}.pdf"
         filepath = gen.generate_report(top5, filename, run_date)
@@ -2907,12 +2909,12 @@ if __name__ == "__main__":
     sys.stdout = _Tee(_tee_out, _log_fh)
     sys.stderr = _Tee(_tee_err, _log_fh)
     print(f"\n{'='*40}")
-    print(f"Run started: {datetime.now().strftime('%c')}")
+    print(f"Run started: {datetime.now(_TZ_EST).strftime('%a %b %-d %H:%M:%S %Y')} EST")
     print(f"{'='*40}")
     try:
         main()
     finally:
-        print(f"Run finished: {datetime.now().strftime('%c')}")
+        print(f"Run finished: {datetime.now(_TZ_EST).strftime('%a %b %-d %H:%M:%S %Y')} EST")
         _log_fh.close()
         sys.stdout = _tee_out
         sys.stderr = _tee_err

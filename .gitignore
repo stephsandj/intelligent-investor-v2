@@ -30,6 +30,14 @@ data/
 # Docker / deploy artefacts
 nginx/nginx.conf.bak
 nginx/nginx.conf.tmp
+docker-compose.override.yml
+
+# Runtime database files
+*.db
+users/
+last_run_state.json
+agent_running.json
+certs/
 
 # Local PostgreSQL binaries (dev only, ~330 MB)
 # ~/Library/Application Support/PostgresApp/ is outside the repo
