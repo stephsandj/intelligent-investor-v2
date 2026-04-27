@@ -400,7 +400,7 @@ def _start_agent(user_id: "str | None" = None, source: str = "manual"):
         _user_log_files[user_id]  = log_file_path
         _user_run_states[user_id] = {
             "running":     True,
-            "started_at":  datetime.utcnow().isoformat() + "Z",
+            "started_at":  datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "finished_at": None,
             "exit_code":   None,
             "source":      source,   # "manual" | "scheduled"
@@ -416,7 +416,7 @@ def _start_agent(user_id: "str | None" = None, source: str = "manual"):
 
     def _monitor(uid, p):
         p.wait()
-        finished_at = datetime.utcnow().isoformat() + "Z"
+        finished_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         with _run_lock:
             prev = _user_run_states.get(uid, {})
             _user_run_states[uid] = {
@@ -469,7 +469,7 @@ def _stop_agent(user_id: "str | None" = None):
         _user_run_states[user_id] = {
             "running":     False,
             "started_at":  state.get("started_at"),
-            "finished_at": datetime.utcnow().isoformat() + "Z",
+            "finished_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "exit_code":   -1,
         }
         _user_processes.pop(user_id, None)
@@ -891,11 +891,11 @@ def _run_etf_screen(user_id: str):
     cancel_ev.clear()
     try:
         with open(os.path.join(_user_data_dir(user_id), "etf_running.json"), "w") as _rf:
-            json.dump({"started_at": datetime.utcnow().isoformat() + "Z"}, _rf)
+            json.dump({"started_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}, _rf)
     except Exception:
         pass
     with _etf_state_lock:
-        _user_etf_states[user_id]["started_at"] = datetime.utcnow().isoformat() + "Z"
+        _user_etf_states[user_id]["started_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     sys.path.insert(0, AGENT_DIR)
 
     def _progress(msg: str):
@@ -932,11 +932,11 @@ def _run_bond_screen(user_id: str):
     cancel_ev.clear()
     try:
         with open(os.path.join(_user_data_dir(user_id), "bond_running.json"), "w") as _rf:
-            json.dump({"started_at": datetime.utcnow().isoformat() + "Z"}, _rf)
+            json.dump({"started_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}, _rf)
     except Exception:
         pass
     with _bond_state_lock:
-        _user_bond_states[user_id]["started_at"] = datetime.utcnow().isoformat() + "Z"
+        _user_bond_states[user_id]["started_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     sys.path.insert(0, AGENT_DIR)
 
     def _progress(msg: str):
@@ -973,11 +973,11 @@ def _run_ticker_research(user_id: str, symbol: str):
     cancel_ev.clear()
     try:
         with open(os.path.join(_user_data_dir(user_id), "ticker_running.json"), "w") as _rf:
-            json.dump({"started_at": datetime.utcnow().isoformat() + "Z"}, _rf)
+            json.dump({"started_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}, _rf)
     except Exception:
         pass
     with _ticker_state_lock:
-        _user_ticker_states[user_id]["started_at"] = datetime.utcnow().isoformat() + "Z"
+        _user_ticker_states[user_id]["started_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         _user_ticker_states[user_id]["symbol"] = symbol
 
     sys.path.insert(0, AGENT_DIR)
@@ -1076,7 +1076,7 @@ def _run_ticker_research(user_id: str, symbol: str):
 
         with open(_ticker_results_file(user_id), "w") as f:
             json.dump({"symbol": symbol.upper(), "result": pick,
-                       "run_date": datetime.utcnow().isoformat() + "Z"}, f, indent=2)
+                       "run_date": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}, f, indent=2)
         logger.info("Ticker research done for user %s: %s score=%.1f",
                     user_id[:8], symbol.upper(), scored["score"])
 
@@ -1296,8 +1296,8 @@ def api_status():
     duration_secs = None
     if run_state.get("finished_at") and run_state.get("started_at"):
         try:
-            started  = datetime.fromisoformat(run_state["started_at"])
-            finished = datetime.fromisoformat(run_state["finished_at"])
+            started  = datetime.fromisoformat(run_state["started_at"].replace("Z", "+00:00"))
+            finished = datetime.fromisoformat(run_state["finished_at"].replace("Z", "+00:00"))
             duration_secs = max(0, int((finished - started).total_seconds()))
         except Exception:
             pass
@@ -1630,8 +1630,8 @@ def api_etf_status():
             if os.path.exists(rf):
                 with open(rf) as _f:
                     fd = json.load(_f)
-                started = datetime.fromisoformat(fd.get("started_at", "").replace("Z", ""))
-                if (datetime.utcnow() - started).total_seconds() < 1800:
+                started = datetime.fromisoformat(fd.get("started_at", "1970-01-01T00:00:00+00:00").replace("Z", "+00:00"))
+                if (datetime.now(timezone.utc) - started).total_seconds() < 1800:
                     state["running"] = True
                     state.setdefault("started_at", fd.get("started_at"))
         except Exception:
@@ -1685,8 +1685,8 @@ def api_bond_status():
             if os.path.exists(rf):
                 with open(rf) as _f:
                     fd = json.load(_f)
-                started = datetime.fromisoformat(fd.get("started_at", "").replace("Z", ""))
-                if (datetime.utcnow() - started).total_seconds() < 1800:
+                started = datetime.fromisoformat(fd.get("started_at", "1970-01-01T00:00:00+00:00").replace("Z", "+00:00"))
+                if (datetime.now(timezone.utc) - started).total_seconds() < 1800:
                     state["running"] = True
                     state.setdefault("started_at", fd.get("started_at"))
         except Exception:
@@ -1781,8 +1781,8 @@ def api_ticker_status():
             if os.path.exists(rf):
                 with open(rf) as _f:
                     fd = json.load(_f)
-                started = datetime.fromisoformat(fd.get("started_at", "").replace("Z", ""))
-                if (datetime.utcnow() - started).total_seconds() < 900:
+                started = datetime.fromisoformat(fd.get("started_at", "1970-01-01T00:00:00+00:00").replace("Z", "+00:00"))
+                if (datetime.now(timezone.utc) - started).total_seconds() < 900:
                     state["running"] = True
                     state.setdefault("started_at", fd.get("started_at"))
         except Exception:
@@ -1890,7 +1890,7 @@ def _scheduled_stock_screen(user_id: str):
             return
 
         logger.info("Scheduled stock screen triggered for user %s at %s",
-                    user_id, datetime.now().strftime("%H:%M:%S"))
+                    user_id, datetime.now(_TZ_EST).strftime("%H:%M:%S EST"))
         ok, msg = _start_agent(user_id=user_id, source="scheduled")
         if ok:
             logger.info("Scheduled screen started for user %s: %s", user_id, msg)

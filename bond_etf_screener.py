@@ -20,7 +20,7 @@ import math
 import time
 import warnings
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Tuple
 
 import pandas as pd
@@ -448,7 +448,7 @@ def run_screen(on_progress=None) -> Dict:
         "top5":           results[:5],
         "screened":       total,
         "eligible":       len(results),
-        "run_date":       datetime.utcnow().isoformat() + "Z",
+        "run_date":       datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "risk_free_rate": round(rf * 100, 2),
         "inflation_rate": round(inflation * 100, 2),
         "duration_secs":  round(time.time() - t0),

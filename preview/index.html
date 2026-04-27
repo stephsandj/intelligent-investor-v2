@@ -1939,16 +1939,25 @@ var _emailVerified      = true;   // false = user is logged in but email not yet
 var _isRunning          = false;  // true only for user-triggered (manual) runs
 // ── EST timezone helpers — all user-facing times displayed in Eastern ──────────
 const _TZ_EST = "America/New_York";
+// Normalise a timestamp string: bare ISO strings without offset are treated as UTC
+// (append Z if no Z / +offset already present) so new Date() parses them correctly.
+function _toUtcDate(dt) {
+  if (dt instanceof Date) return dt;
+  if (typeof dt === 'string' && dt.length >= 10 && !/Z$|[+-]\d{2}:\d{2}$/.test(dt)) {
+    dt = dt + 'Z';  // treat naive ISO strings as UTC, not local browser time
+  }
+  return new Date(dt);
+}
 function _estTime(dt, opts) {
-  const d = (dt instanceof Date) ? dt : new Date(dt);
+  const d = _toUtcDate(dt);
   return d.toLocaleTimeString("en-US", Object.assign({ timeZone: _TZ_EST, hour:"numeric", minute:"2-digit" }, opts || {}));
 }
 function _estDate(dt, opts) {
-  const d = (dt instanceof Date) ? dt : new Date(dt);
+  const d = _toUtcDate(dt);
   return d.toLocaleDateString("en-US", Object.assign({ timeZone: _TZ_EST }, opts || {}));
 }
 function _estFull(dt, opts) {
-  const d = (dt instanceof Date) ? dt : new Date(dt);
+  const d = _toUtcDate(dt);
   return d.toLocaleString("en-US", Object.assign({ timeZone: _TZ_EST }, opts || {}));
 }
 var _scheduledRunActive = false;  // true when a background scheduled run is in progress
