@@ -4686,6 +4686,12 @@ async function startRun() {
   _lockAgentConfig();
   _updateRunUI();
 
+  // Immediately reflect running state in the LAST RUN KPI card — no reload needed
+  const _kpiLastRun = document.getElementById('kpi-last-run');
+  const _kpiLastSub = document.getElementById('kpi-last-sub');
+  if (_kpiLastRun) _kpiLastRun.textContent = 'Running…';
+  if (_kpiLastSub) _kpiLastSub.textContent  = '';
+
   // ── Session keepalive — refresh token every 4 min while running ─
   if (_keepAliveInterval) clearInterval(_keepAliveInterval);
   _keepAliveInterval = setInterval(() => {
