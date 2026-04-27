@@ -346,20 +346,23 @@ def run_screen(on_progress=None) -> Dict:
     rf   = _get_risk_free_rate()
     if on_progress: on_progress(f"Risk-free rate (3M Treasury): {rf*100:.2f}%")
 
-    # Download SPY for beta calculation (3yr)
-    if on_progress: on_progress("Downloading SPY benchmark (3yr)…")
-    spy_hist = yf.download("SPY", period="3y", auto_adjust=True,
-                           progress=False, threads=False)
-    spy_close = spy_hist["Close"].squeeze() if not spy_hist.empty else pd.Series(dtype=float)
+    import requests as _req
+    _sess = _req.Session()
+    try:
+      # Download SPY for beta calculation (3yr)
+      if on_progress: on_progress("Downloading SPY benchmark (3yr)…")
+      spy_hist = yf.download("SPY", period="3y", auto_adjust=True,
+                             progress=False, threads=False, session=_sess)
+      spy_close = spy_hist["Close"].squeeze() if not spy_hist.empty else pd.Series(dtype=float)
 
-    results = []
-    total   = len(GROWTH_ETF_UNIVERSE)
+      results = []
+      total   = len(GROWTH_ETF_UNIVERSE)
 
-    for i, symbol in enumerate(GROWTH_ETF_UNIVERSE):
+      for i, symbol in enumerate(GROWTH_ETF_UNIVERSE):
         if on_progress:
             on_progress(f"  [{i+1}/{total}] Fetching {symbol}…")
         try:
-            ticker   = yf.Ticker(symbol)
+            ticker   = yf.Ticker(symbol, session=_sess)
             info     = ticker.info or {}
             name     = info.get("longName") or info.get("shortName") or symbol
             category = info.get("category") or ""
@@ -372,7 +375,7 @@ def run_screen(on_progress=None) -> Dict:
 
             # Price history
             h5 = yf.download(symbol, period="5y", auto_adjust=True,
-                              progress=False, threads=False)
+                              progress=False, threads=False, session=_sess)
             if h5.empty:
                 continue
             close5 = h5["Close"].squeeze()
@@ -399,10 +402,10 @@ def run_screen(on_progress=None) -> Dict:
             if on_progress: on_progress(f"    {symbol} error: {e}")
         time.sleep(0.3)
 
-    # Sort best-first
-    results.sort(key=lambda x: x["score"], reverse=True)
+      # Sort best-first
+      results.sort(key=lambda x: x["score"], reverse=True)
 
-    return {
+      return {
         "results":        results,
         "top5":           results[:5],
         "screened":       total,
@@ -410,7 +413,12 @@ def run_screen(on_progress=None) -> Dict:
         "run_date":       datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "risk_free_rate": round(rf * 100, 2),
         "duration_secs":  round(time.time() - t0),
-    }
+      }
+    finally:
+        try:
+            _sess.close()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

@@ -1034,8 +1034,11 @@ class ValueInvestingAnalyzer:
             forward_pe = None
             yf_ticker  = None
             country    = ""     # populated from yfinance; used for geography filtering
+            _yf_sess   = None
             try:
-                yf_ticker = yf.Ticker(symbol)
+                import requests as _req
+                _yf_sess  = _req.Session()
+                yf_ticker = yf.Ticker(symbol, session=_yf_sess)
                 yf_info = yf_ticker.info or {}
 
                 def yf_f(k, divisor=1):
@@ -1081,6 +1084,12 @@ class ValueInvestingAnalyzer:
 
             except Exception as e:
                 print(f"    yfinance fallback note for {symbol}: {e}")
+            finally:
+                try:
+                    if _yf_sess is not None:
+                        _yf_sess.close()
+                except Exception:
+                    pass
 
             # ── Historical verification (10yr earnings, dividend history) ───────
             hist_profitable_years = None

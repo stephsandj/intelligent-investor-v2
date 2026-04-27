@@ -66,6 +66,23 @@ logger = logging.getLogger("dashboard_v2")
 import warnings
 warnings.filterwarnings("ignore", message=".*urllib3 v2 only supports OpenSSL.*")
 
+# ── Raise file-descriptor limit to avoid "Too many open files" from yfinance ────
+# macOS launchctl default soft limit is 256; urllib3 connection pools exhaust it
+# after a few dozen yfinance calls. Set to 65536 unconditionally.
+import resource as _resource
+try:
+    _resource.setrlimit(_resource.RLIMIT_NOFILE, (65536, _resource.RLIM_INFINITY))
+    logger.info("File-descriptor limit raised to 65536")
+except ValueError:
+    try:
+        # Some macOS setups cap the hard limit; try a lower value
+        _resource.setrlimit(_resource.RLIMIT_NOFILE, (10240, 10240))
+        logger.info("File-descriptor limit raised to 10240")
+    except Exception as _e2:
+        logger.warning("Could not raise fd limit: %s", _e2)
+except Exception as _e:
+    logger.warning("Could not raise fd limit: %s", _e)
+
 def _pip_install(*pkgs):
     subprocess.check_call(
         [sys.executable, "-m", "pip", "install", "--user", "-q", *pkgs]
