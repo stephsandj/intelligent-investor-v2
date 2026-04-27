@@ -127,6 +127,39 @@ def _ticker_results_file(user_id: str) -> str:
 def _user_state_file(user_id: str) -> str:
     return os.path.join(_user_data_dir(user_id), "last_run_state.json")
 
+
+def _cleanup_stale_running_files():
+    """Delete all *_running.json flag files at startup.
+
+    These files are created when a screen run starts and deleted when it ends.
+    If the server crashes or is restarted while a run is in progress the file
+    remains on disk and causes the status endpoints to falsely report
+    running=True for up to 30 minutes — making the frontend spin forever
+    after a browser refresh. Purging at startup guarantees a clean slate.
+    """
+    users_dir = os.path.join(AGENT_DIR, "users")
+    if not os.path.isdir(users_dir):
+        return
+    _stale_names = ("etf_running.json", "bond_running.json",
+                    "ticker_running.json", "agent_running.json")
+    for entry in os.scandir(users_dir):
+        if not entry.is_dir():
+            continue
+        for fname in _stale_names:
+            fpath = os.path.join(entry.path, fname)
+            try:
+                os.remove(fpath)
+            except FileNotFoundError:
+                pass  # already gone — normal case
+            except Exception as _e:
+                pass  # non-fatal; status endpoint will fall back to in-memory state
+
+
+# Run at import time so both `python3 dashboard_v2.py` and Gunicorn workers
+# start with a clean slate — no leftover running-flag files from prior crashes.
+_cleanup_stale_running_files()
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. Flask app
 # ─────────────────────────────────────────────────────────────────────────────

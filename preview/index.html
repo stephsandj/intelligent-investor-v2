@@ -4826,12 +4826,12 @@ function _finishRun(completed) {
     if (_pill) _pill.classList.remove('running');
     if (_stxt) _stxt.textContent = 'Idle';
   } else {
-    // Stopped or failed — show blank placeholder (do not restore old picks)
-    hideAnalysis();  // Hide any analysis when run is stopped
-    const picksWrap = document.getElementById('picks-wrap');
-    if (picksWrap) picksWrap.innerHTML = '<div class="empty-picks-card"><div style="font-size:2.5rem">🔍</div><h3>No picks</h3><p>The screening run was stopped or did not complete. Click <strong>Run Now</strong> to start a new screen.</p></div>';
-    // Refresh the counter — the stop endpoint decremented the quota; reflect it now
-    _refreshRunCount();
+    // Stopped — reload the full dashboard so:
+    //   • LAST RUN card immediately shows the stop time instead of "Running…"
+    //   • Previous screening picks are restored (better UX than a blank card)
+    //   • Run-count quota reflects the refund from the stop endpoint
+    hideAnalysis();
+    _loadDashboard();
   }
 }
 
