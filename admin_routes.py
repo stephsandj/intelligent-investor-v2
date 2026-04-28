@@ -520,6 +520,45 @@ def api_delete_user(user_id: str):
 
 
 # ---------------------------------------------------------------------------
+# POST /admin/api/users/bulk-delete  — delete multiple users at once
+# ---------------------------------------------------------------------------
+
+@admin_bp.route("/api/users/bulk-delete", methods=["POST"])
+@admin_portal_required
+def api_bulk_delete_users():
+    """Bulk hard-delete a list of users. Body: { user_ids: [uuid, ...] }"""
+    data     = request.get_json(silent=True) or {}
+    user_ids = data.get("user_ids", [])
+
+    if not user_ids or not isinstance(user_ids, list):
+        return jsonify({"error": "user_ids must be a non-empty list"}), 422
+    if len(user_ids) > 200:
+        return jsonify({"error": "Cannot delete more than 200 users at once"}), 422
+
+    deleted = 0
+    errors  = []
+
+    for uid in user_ids:
+        user = get_user_by_id(uid)
+        if not user:
+            errors.append(f"{uid}: not found")
+            continue
+        try:
+            log_audit(
+                actor_id=g.admin_id,
+                target_user_id=uid,
+                action="admin_bulk_delete_user",
+                notes=f"Bulk deleted: {user.get('email')} by {g.admin.get('email')}",
+            )
+            delete_user(uid)
+            deleted += 1
+        except Exception as exc:
+            errors.append(f"{uid}: {exc}")
+
+    return jsonify({"deleted": deleted, "errors": errors}), 200
+
+
+# ---------------------------------------------------------------------------
 # PUT /admin/api/users/<user_id>  — update name / email / password
 # ---------------------------------------------------------------------------
 

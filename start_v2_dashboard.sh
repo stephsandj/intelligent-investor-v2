@@ -24,6 +24,14 @@ if ! pgrep -q "postgres: " 2>/dev/null; then
     fi
 fi
 
-# 2. Start V2 Flask dashboard
+# 2. Load environment variables from .env
 cd "/Users/stephanesandjong/Library/Application Support/IntelligentInvestorAgentV2"
+if [ -f ".env" ]; then
+    set -a
+    source .env
+    set +a
+    echo "[$(date)] Loaded .env variables"
+fi
+
+# 3. Start V2 Flask dashboard
 exec /usr/bin/python3 dashboard_v2.py

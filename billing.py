@@ -563,16 +563,16 @@ def cancel():
 
 
 # Destination for all enterprise sales inquiries
-_ENTERPRISE_INQUIRY_TO = "propertymanagement314@gmail.com"
+_ENTERPRISE_INQUIRY_TO = "enroll@terminalelearn.com"
 
 
 @billing_bp.route("/enterprise-inquiry", methods=["POST"])
-@auth_required
 def enterprise_inquiry():
     """
     POST /billing/enterprise-inquiry
     Submits an Enterprise Sales inquiry form and emails it to the sales address.
-    Body (JSON): { name, company, message }
+    Public endpoint — accessible by both authenticated and unauthenticated users.
+    Body (JSON): { name, company, email, message }
     """
     from auth import _send_email, _smtp_configured
 
@@ -584,8 +584,11 @@ def enterprise_inquiry():
     if not message:
         return jsonify({"error": "Please enter a message before sending."}), 400
 
-    # Pull the user's email from the auth context (g.user is set by @auth_required)
-    user_email = (g.user or {}).get("email", "") or ""
+    # Try to get email: first from form body, then from auth context if logged in
+    form_email = str(body.get("email", "")).strip()
+    auth_user  = getattr(g, "user", None) or {}
+    user_email = form_email or auth_user.get("email", "") or ""
+    user_id    = getattr(g, "user_id", "anonymous")
 
     subject = "Enterprise Sales Inquiry"
     if name or user_email:
@@ -607,7 +610,7 @@ def enterprise_inquiry():
       <td style="padding:10px 14px;border:1px solid #e5e7eb">{company or "—"}</td>
     </tr>
     <tr style="background:#fafafa">
-      <td style="padding:10px 14px;font-weight:600;border:1px solid #e5e7eb">Account email</td>
+      <td style="padding:10px 14px;font-weight:600;border:1px solid #e5e7eb">Email</td>
       <td style="padding:10px 14px;border:1px solid #e5e7eb">{user_email or "—"}</td>
     </tr>
     <tr>
@@ -623,7 +626,7 @@ def enterprise_inquiry():
 
     logger.info(
         "enterprise-inquiry: user=%s name=%s company=%s smtp_configured=%s",
-        g.user_id, name, company, _smtp_configured(),
+        user_id, name, company, _smtp_configured(),
     )
 
     sent = _send_email(_ENTERPRISE_INQUIRY_TO, subject, html_body)
@@ -635,7 +638,7 @@ def enterprise_inquiry():
     logger.warning(
         "enterprise-inquiry: email NOT sent (SMTP not configured or error). "
         "Inquiry details — user=%s name=%s company=%s message=%r",
-        g.user_id, name, company, message,
+        user_id, name, company, message,
     )
     # Still return OK to the user (we've logged it); let them know to follow up
     return jsonify({"ok": True, "fallback": True})

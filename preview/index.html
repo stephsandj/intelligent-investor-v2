@@ -129,6 +129,10 @@
   .form-group input[type="password"]:focus { border-color:var(--orange); }
   .form-group input[type="checkbox"] { accent-color: var(--orange); }
   .form-group input[type="checkbox"]:hover { opacity: 0.8; }
+  .field-error { color:var(--red); font-size:.78rem; margin-top:5px; display:none; line-height:1.4; }
+  .field-error.visible { display:block; }
+  .form-group input.input-error { border-color:var(--red) !important; }
+  .form-group input.input-error:focus { border-color:var(--red) !important; }
   .submit-btn { width:100%; padding:11px; background:var(--orange); color:#000; border:none; border-radius:8px; font-weight:700; font-size:.9rem; cursor:pointer; margin-top:8px; }
   .submit-btn:hover { opacity:.9; }
 
@@ -544,6 +548,57 @@
   .stat-cell { background:var(--surface); padding:14px 18px; text-align:center; }
   .stat-num  { font-size:1.5rem; font-weight:800; color:var(--orange); }
   .stat-lbl  { font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin-top:2px; }
+
+  /* ══ Site Footer ══════════════════════════════════════════════════ */
+  .site-footer { background:#010409; border-top:1px solid var(--border); padding:52px 48px 0; margin-top:auto; }
+  .footer-inner { max-width:1100px; margin:0 auto; }
+  .footer-grid { display:grid; grid-template-columns:2.2fr 1fr 1fr 1fr; gap:48px; padding-bottom:44px; }
+  .footer-brand-logo { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+  .footer-brand-logo img { height:28px; width:auto; }
+  .footer-brand p { color:var(--muted); font-size:.83rem; line-height:1.65; max-width:260px; }
+  .footer-col h4 { font-size:.72rem; font-weight:700; color:var(--text); text-transform:uppercase; letter-spacing:.1em; margin-bottom:18px; }
+  .footer-col ul { list-style:none; display:flex; flex-direction:column; gap:11px; }
+  .footer-col ul li { font-size:.84rem; color:var(--muted); display:flex; align-items:flex-start; gap:9px; line-height:1.45; }
+  .footer-col ul li .fi { color:var(--orange); flex-shrink:0; margin-top:1px; }
+  .footer-link { color:var(--muted); text-decoration:none; font-size:.84rem; cursor:pointer; background:none; border:none; padding:0; font-family:inherit; transition:color .15s; display:block; }
+  .footer-link:hover { color:var(--orange); }
+  .footer-divider { border:none; border-top:1px solid var(--border); margin:0; }
+  .footer-bottom { padding:18px 0 20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+  .footer-copy { color:var(--muted); font-size:.77rem; }
+  .footer-bottom-links { display:flex; gap:22px; }
+  @media(max-width:860px) {
+    .footer-grid { grid-template-columns:1fr 1fr; gap:32px; }
+    .footer-brand { grid-column:1/-1; }
+  }
+  @media(max-width:520px) {
+    .site-footer { padding:40px 24px 0; }
+    .footer-grid { grid-template-columns:1fr; gap:28px; }
+    .footer-bottom { flex-direction:column; align-items:flex-start; }
+  }
+
+  /* ══ Legal / Privacy / T&C Overlay ════════════════════════════════ */
+  .legal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.78); z-index:700; display:none; align-items:center; justify-content:center; padding:20px; }
+  .legal-overlay.open { display:flex; }
+  .legal-box { background:var(--surface); border:1px solid var(--border); border-radius:16px; width:100%; max-width:740px; max-height:90vh; display:flex; flex-direction:column; animation:slideIn .22s ease; box-shadow:0 24px 80px rgba(0,0,0,.6); }
+  .legal-hdr { display:flex; align-items:center; gap:16px; padding:22px 28px; border-bottom:1px solid var(--border); flex-shrink:0; }
+  .legal-hdr img { height:40px; width:auto; max-width:180px; flex-shrink:0; object-fit:contain; object-position:left; }
+  .legal-hdr-text { flex:1; min-width:0; }
+  .legal-hdr-text h2 { font-size:1.05rem; font-weight:800; margin:0; }
+  .legal-hdr-text p { color:var(--muted); font-size:.75rem; margin:3px 0 0; }
+  .legal-x { background:none; border:1px solid var(--border); color:var(--muted); font-size:1rem; cursor:pointer; padding:5px 9px; border-radius:7px; flex-shrink:0; line-height:1; transition:all .15s; }
+  .legal-x:hover { border-color:var(--orange); color:var(--text); }
+  .legal-scroll { overflow-y:auto; padding:28px 32px; flex:1; }
+  .legal-scroll::-webkit-scrollbar { width:5px; }
+  .legal-scroll::-webkit-scrollbar-track { background:transparent; }
+  .legal-scroll::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+  .legal-scroll::-webkit-scrollbar-thumb:hover { background:var(--muted); }
+  .legal-scroll h3 { font-size:.88rem; font-weight:700; color:var(--orange); margin:26px 0 9px; padding-bottom:6px; border-bottom:1px solid rgba(240,165,0,.15); }
+  .legal-scroll h3:first-child { margin-top:0; }
+  .legal-scroll p { color:var(--muted); font-size:.83rem; line-height:1.75; margin-bottom:10px; }
+  .legal-scroll ul { color:var(--muted); font-size:.83rem; line-height:1.75; padding-left:18px; margin-bottom:10px; }
+  .legal-scroll ul li { margin-bottom:4px; }
+  .legal-scroll strong { color:var(--text); }
+  .legal-ftr { padding:16px 28px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; flex-shrink:0; }
 </style>
 </head>
 <body>
@@ -592,26 +647,50 @@
     <div class="form-pane" id="auth-pane-register">
       <div class="form-group">
         <label>Full name</label>
-        <input type="text" id="r-name" placeholder="">
+        <input type="text" id="r-name" placeholder=""
+               oninput="_clearRegField('r-name')"
+               autocomplete="name">
+        <div id="r-name-error" class="field-error"></div>
       </div>
       <div class="form-group">
         <label>Email address</label>
-        <input type="email" id="r-email" placeholder="">
+        <input type="email" id="r-email" placeholder=""
+               oninput="_clearRegField('r-email')"
+               onblur="_blurValidateRegEmail()"
+               autocomplete="email">
+        <div id="r-email-error" class="field-error"></div>
       </div>
       <div class="form-group">
         <label>Password <small style="color:var(--muted)">(min 12 chars)</small></label>
-        <input type="password" id="r-pwd" placeholder="" oninput="updatePasswordStrength('r-pwd', 'r-strength')">
+        <input type="password" id="r-pwd" placeholder=""
+               oninput="updatePasswordStrength('r-pwd', 'r-strength'); _clearRegField('r-pwd')"
+               autocomplete="new-password">
         <div id="r-strength" style="margin-top:8px; font-size:.75rem;"></div>
+        <div id="r-pwd-error" class="field-error"></div>
       </div>
       <div class="form-group" style="margin-bottom: 20px;">
         <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; user-select: none;">
-          <input type="checkbox" id="r-disclaimer" style="margin-top: 2px; cursor: pointer; width: 18px; height: 18px; flex-shrink: 0;">
-          <span style="font-size: 0.85rem; line-height: 1.5; color: var(--muted);">
-            I understand this tool is for research and educational purposes only and does not constitute financial advice. Investing involves risk, including potential loss of principal. I am solely responsible for my investment decisions.
+          <input type="checkbox" id="r-disclaimer" style="margin-top: 3px; cursor: pointer; width: 16px; height: 16px; flex-shrink: 0; accent-color: var(--orange);">
+          <span style="font-size: 0.82rem; line-height: 1.55; color: var(--muted);">
+            I have read and agree to the
+            <button type="button" onclick="openLegalModal('terms')"
+              style="background:none;border:none;color:var(--orange);font-size:inherit;cursor:pointer;padding:0;font-family:inherit;text-decoration:underline;text-underline-offset:2px;">
+              Terms &amp; Conditions
+            </button>,
+            <button type="button" onclick="openLegalModal('privacy')"
+              style="background:none;border:none;color:var(--orange);font-size:inherit;cursor:pointer;padding:0;font-family:inherit;text-decoration:underline;text-underline-offset:2px;">
+              Privacy Notice
+            </button>,
+            and
+            <button type="button" onclick="openLegalModal('legal')"
+              style="background:none;border:none;color:var(--orange);font-size:inherit;cursor:pointer;padding:0;font-family:inherit;text-decoration:underline;text-underline-offset:2px;">
+              Legal Notices
+            </button>
+            of Terminal Investor. I understand this platform is for research and educational purposes only, does not constitute financial or investment advice, and that investing involves risk including the possible loss of principal. I am solely responsible for my investment decisions.
           </span>
         </label>
-        <div id="r-disclaimer-error" style="color: var(--red); font-size: 0.8rem; margin-top: 8px; display: none;">
-          ✗ You must agree to the disclaimer to create an account
+        <div id="r-disclaimer-error" style="color: var(--red); font-size: 0.78rem; margin-top: 8px; display: none;">
+          ✗ You must read and agree to the Terms &amp; Conditions to create an account
         </div>
       </div>
       <button class="submit-btn" onclick="doRegister()">Start Free Trial →</button>
@@ -1083,6 +1162,297 @@
     </div>
   </div>
 
+  <!-- ══ SITE FOOTER ═══════════════════════════════════════════════ -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-grid">
+
+        <!-- Brand -->
+        <div class="footer-brand">
+          <div class="footer-brand-logo">
+            <img src="/logo.png" alt="Terminal Investor">
+          </div>
+          <p>Institutional-grade value &amp; growth screening for individual investors. Powered by real-time fundamentals, AI analysis, and Graham–Buffett principles.</p>
+        </div>
+
+        <!-- Contact -->
+        <div class="footer-col">
+          <h4>Contact Us</h4>
+          <ul>
+            <li>
+              <span class="fi">✉</span>
+              <a href="mailto:sales@terminalelearn.com" class="footer-link">sales@terminalelearn.com</a>
+            </li>
+            <li>
+              <span class="fi">📞</span>
+              <a href="tel:+18008376462" class="footer-link">+1 (800) TERMINA<br><span style="font-size:.75rem;color:var(--muted);padding-left:0">(800) 837-6462</span></a>
+            </li>
+            <li>
+              <span class="fi">📍</span>
+              <span>5900 Balcones Drive<br>Suite 100<br>Austin, TX 78731</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Product -->
+        <div class="footer-col">
+          <h4>Product</h4>
+          <ul>
+            <li><button class="footer-link" onclick="showAuthModal('register')">Start Free Trial</button></li>
+            <li><button class="footer-link" onclick="showAuthModal('signin')">Sign In</button></li>
+            <li><button class="footer-link" onclick="showSampleReport()">Sample Report</button></li>
+            <li><button class="footer-link" onclick="document.querySelector('.pricing').scrollIntoView({behavior:'smooth'})">Pricing</button></li>
+          </ul>
+        </div>
+
+        <!-- Legal -->
+        <div class="footer-col">
+          <h4>Legal</h4>
+          <ul>
+            <li><button class="footer-link" onclick="openLegalModal('legal')">Legal Notices</button></li>
+            <li><button class="footer-link" onclick="openLegalModal('privacy')">Privacy Notice</button></li>
+            <li><button class="footer-link" onclick="openLegalModal('terms')">Terms &amp; Conditions</button></li>
+          </ul>
+        </div>
+
+      </div><!-- /footer-grid -->
+
+      <hr class="footer-divider">
+
+      <div class="footer-bottom">
+        <span class="footer-copy">Copyright &copy; <span id="footer-year"></span> Terminal Elearn. All Rights Reserved.</span>
+        <div class="footer-bottom-links">
+          <button class="footer-link" onclick="openLegalModal('legal')">Legal Notices</button>
+          <button class="footer-link" onclick="openLegalModal('privacy')">Privacy Notice</button>
+          <button class="footer-link" onclick="openLegalModal('terms')">Terms &amp; Conditions</button>
+        </div>
+      </div>
+
+    </div><!-- /footer-inner -->
+  </footer>
+  <!-- ══ END FOOTER ════════════════════════════════════════════════ -->
+
+</div><!-- /page-landing -->
+
+<!-- ══════════════════════════════════════════════════════════════════
+     LEGAL NOTICES MODAL
+══════════════════════════════════════════════════════════════════ -->
+<div class="legal-overlay" id="legal-overlay-legal" onclick="if(event.target===this)closeLegalModal('legal')">
+  <div class="legal-box">
+    <div class="legal-hdr">
+      <img src="/logo.png" alt="Terminal Investor">
+      <div class="legal-hdr-text">
+        <h2>Legal Notices</h2>
+        <p>Effective January 1, 2026 &nbsp;·&nbsp; Terminal Elearn, Inc.</p>
+      </div>
+      <button class="legal-x" onclick="closeLegalModal('legal')">✕</button>
+    </div>
+    <div class="legal-scroll">
+      <h3>1. Not a Registered Investment Advisor</h3>
+      <p>Terminal Investor is operated by Terminal Elearn, Inc. ("Company," "we," "us," or "our"). The Company is <strong>not a registered investment advisor, broker-dealer, financial planner, or fiduciary</strong> under the Investment Advisers Act of 1940, the Securities Exchange Act of 1934, or any applicable state securities laws. Nothing contained on this platform constitutes investment advice, a recommendation, an offer to buy or sell any security, or a solicitation of any offer to buy or sell any security.</p>
+
+      <h3>2. For Informational and Educational Purposes Only</h3>
+      <p>All content, data, screener outputs, AI-generated analysis, PDF reports, ETF screens, and bond screens provided through the Terminal Investor platform are for <strong>informational and educational purposes only</strong>. Users are solely responsible for their own investment research and decisions. You should consult a licensed financial advisor, tax professional, or attorney before making any investment decision.</p>
+
+      <h3>3. No Warranty on Data Accuracy</h3>
+      <p>Financial data is sourced from third-party providers including Yahoo Finance (yfinance), Financial Modeling Prep (FMP), and NASDAQ data feeds. While we strive to display accurate and timely information, we make <strong>no representations or warranties, express or implied</strong>, regarding the completeness, accuracy, reliability, suitability, or availability of any data, reports, or other content. Data may be delayed, incomplete, or contain errors outside of our control.</p>
+
+      <h3>4. Algorithmic Screening Limitations</h3>
+      <p>Terminal Investor's screening algorithms apply quantitative filters based on publicly available fundamental data. Screening criteria are derived from methodologies inspired by Benjamin Graham and Warren Buffett but do not represent the actual views, endorsements, or investment processes of any person. <strong>Past screening results are not indicative of future investment performance.</strong> A stock appearing in a screen output is not a buy recommendation.</p>
+
+      <h3>5. Investment Risk Disclosure</h3>
+      <p>Investing in securities involves <strong>significant risk</strong>, including the possible loss of all principal invested. Stock prices can and do go to zero. ETF and bond investments are subject to interest rate risk, credit risk, market risk, and liquidity risk. The value of investments may fluctuate, and investors may receive back less than they invest. Past performance is not a guarantee of future results.</p>
+
+      <h3>6. Forward-Looking Statements</h3>
+      <p>Certain information and AI-generated analysis may contain forward-looking statements that involve known and unknown risks, uncertainties, and other factors. These statements are not guarantees of future performance and actual results may differ materially. We expressly disclaim any obligation to update forward-looking statements.</p>
+
+      <h3>7. Limitation of Liability</h3>
+      <p>To the maximum extent permitted by applicable law, the Company, its officers, directors, employees, agents, and licensors shall not be liable for any indirect, incidental, special, punitive, consequential, or exemplary damages, including but not limited to lost profits, lost data, financial losses, or investment losses arising out of or in connection with your use of the platform, even if the Company has been advised of the possibility of such damages. Our aggregate liability shall not exceed the amount paid by you to the Company in the twelve (12) months preceding the claim.</p>
+
+      <h3>8. Intellectual Property</h3>
+      <p>All software, design, code, algorithms, reports, documentation, branding, and content on the Terminal Investor platform are the exclusive intellectual property of Terminal Elearn, Inc. and are protected by copyright, trade secret, and other applicable laws. You may not copy, reproduce, distribute, modify, create derivative works of, publicly display, or commercially exploit any content without our prior written consent.</p>
+
+      <h3>9. Third-Party Data Providers</h3>
+      <p>We use data from Yahoo Finance, Financial Modeling Prep, and other providers subject to their own terms of service. We are not affiliated with, endorsed by, or sponsored by these providers. References to third-party products or services are for informational purposes only.</p>
+
+      <h3>10. Governing Law and Jurisdiction</h3>
+      <p>These Legal Notices and any disputes arising from your use of the platform shall be governed by the laws of the State of Texas, without regard to its conflict of law principles. You consent to the exclusive jurisdiction of the state and federal courts located in Travis County, Texas for resolution of any disputes.</p>
+
+      <h3>11. Contact</h3>
+      <p>For legal inquiries, contact us at <strong>legal@terminalelearn.com</strong> or by mail at 5900 Balcones Drive, Suite 100, Austin, TX 78731.</p>
+    </div>
+    <div class="legal-ftr">
+      <button class="btn btn-orange" onclick="closeLegalModal('legal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     PRIVACY NOTICE MODAL
+══════════════════════════════════════════════════════════════════ -->
+<div class="legal-overlay" id="legal-overlay-privacy" onclick="if(event.target===this)closeLegalModal('privacy')">
+  <div class="legal-box">
+    <div class="legal-hdr">
+      <img src="/logo.png" alt="Terminal Investor">
+      <div class="legal-hdr-text">
+        <h2>Privacy Notice</h2>
+        <p>Effective January 1, 2026 &nbsp;·&nbsp; Terminal Elearn, Inc.</p>
+      </div>
+      <button class="legal-x" onclick="closeLegalModal('privacy')">✕</button>
+    </div>
+    <div class="legal-scroll">
+      <h3>1. Introduction</h3>
+      <p>Terminal Elearn, Inc. ("Company," "we," "us," or "our") is committed to protecting your privacy. This Privacy Notice explains how we collect, use, disclose, and safeguard your information when you use the Terminal Investor platform accessible at our website and web application (the "Service").</p>
+      <p>By using the Service, you acknowledge that you have read and understood this Privacy Notice. If you do not agree with its terms, please do not access or use our Service.</p>
+
+      <h3>2. Information We Collect</h3>
+      <p><strong>Account Information:</strong> When you register, we collect your full name, email address, and a securely hashed password (we never store your password in plain text).</p>
+      <p><strong>Profile Information:</strong> Optionally, information you provide when updating your profile.</p>
+      <p><strong>Usage Data:</strong> We collect information about how you interact with the Service, including screener runs, PDF report generation, pages visited, timestamps, and feature usage. This data is stored in our database to provide and improve the Service.</p>
+      <p><strong>Device and Technical Data:</strong> Your browser type, operating system, IP address, and general location may be logged for security, fraud prevention, and analytics purposes.</p>
+      <p><strong>Payment Data:</strong> Payment processing is handled exclusively by Stripe, Inc. We do <strong>not</strong> store your credit card numbers, bank account details, or full payment instrument details on our servers.</p>
+
+      <h3>3. How We Use Your Information</h3>
+      <ul>
+        <li>To create and manage your account</li>
+        <li>To deliver screener results, AI analysis, and PDF reports</li>
+        <li>To process subscription payments via Stripe</li>
+        <li>To send verification, notification, and transactional emails</li>
+        <li>To respond to your inquiries and provide customer support</li>
+        <li>To detect and prevent fraud, abuse, and security incidents</li>
+        <li>To comply with legal obligations</li>
+        <li>To improve and develop the Service</li>
+      </ul>
+      <p>We do <strong>not</strong> sell, rent, or trade your personal information to third parties for marketing purposes.</p>
+
+      <h3>4. Data Storage and Security</h3>
+      <p>Your data is stored in a PostgreSQL database. Passwords are hashed using bcrypt before storage. Authentication is managed via JWT tokens with short expiration windows. We use HTTPS/TLS encryption for all data in transit.</p>
+      <p>While we implement industry-standard security measures, no system is 100% secure. You are responsible for maintaining the confidentiality of your login credentials.</p>
+
+      <h3>5. Third-Party Service Providers</h3>
+      <ul>
+        <li><strong>Stripe, Inc.</strong> — Payment processing. Subject to Stripe's own Privacy Policy.</li>
+        <li><strong>Google (Gmail SMTP)</strong> — Transactional email delivery.</li>
+        <li><strong>Yahoo Finance / yfinance</strong> — Market data provider. No personal data is shared.</li>
+        <li><strong>Financial Modeling Prep (FMP)</strong> — Fundamental data provider. No personal data is shared.</li>
+      </ul>
+
+      <h3>6. Cookies and Local Storage</h3>
+      <p>We use <strong>HttpOnly cookies</strong> to store authentication tokens securely. We use <strong>localStorage</strong> and <strong>sessionStorage</strong> in your browser to persist UI state (e.g., active view, session information). We do not use advertising cookies or third-party tracking cookies.</p>
+
+      <h3>7. Email Communications</h3>
+      <p>By creating an account, you consent to receive transactional emails such as account verification, password resets, and screener result notifications. You may manage email delivery preferences in your Account settings. We do not send unsolicited marketing emails without your explicit consent.</p>
+
+      <h3>8. Data Retention</h3>
+      <p>We retain your personal data for as long as your account is active or as needed to provide the Service. If you close your account, we will delete or anonymize your personal data within 90 days, except where we are required to retain it for legal, regulatory, or legitimate business purposes (e.g., billing records).</p>
+
+      <h3>9. Your Rights</h3>
+      <p>Depending on your jurisdiction, you may have the right to:</p>
+      <ul>
+        <li>Access the personal data we hold about you</li>
+        <li>Correct inaccurate or incomplete data</li>
+        <li>Request deletion of your personal data ("right to be forgotten")</li>
+        <li>Object to or restrict certain processing</li>
+        <li>Data portability</li>
+      </ul>
+      <p>To exercise these rights, contact us at <strong>legal@terminalelearn.com</strong>.</p>
+
+      <h3>10. Children's Privacy</h3>
+      <p>The Service is not directed to individuals under the age of 18. We do not knowingly collect personal information from minors. If you believe a minor has provided us with personal data, please contact us immediately.</p>
+
+      <h3>11. Changes to This Notice</h3>
+      <p>We may update this Privacy Notice periodically. We will notify you of material changes by posting the updated notice on this page with a new effective date. Your continued use of the Service after changes are posted constitutes acceptance of the updated notice.</p>
+
+      <h3>12. Contact Us</h3>
+      <p>For privacy-related questions or requests, contact: <strong>legal@terminalelearn.com</strong><br>Terminal Elearn, Inc. &nbsp;·&nbsp; 5900 Balcones Drive, Suite 100, Austin, TX 78731</p>
+    </div>
+    <div class="legal-ftr">
+      <button class="btn btn-orange" onclick="closeLegalModal('privacy')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     TERMS & CONDITIONS MODAL
+══════════════════════════════════════════════════════════════════ -->
+<div class="legal-overlay" id="legal-overlay-terms" onclick="if(event.target===this)closeLegalModal('terms')">
+  <div class="legal-box">
+    <div class="legal-hdr">
+      <img src="/logo.png" alt="Terminal Investor">
+      <div class="legal-hdr-text">
+        <h2>Terms &amp; Conditions</h2>
+        <p>Effective January 1, 2026 &nbsp;·&nbsp; Terminal Elearn, Inc.</p>
+      </div>
+      <button class="legal-x" onclick="closeLegalModal('terms')">✕</button>
+    </div>
+    <div class="legal-scroll">
+      <h3>1. Acceptance of Terms</h3>
+      <p>By accessing or using the Terminal Investor platform (the "Service"), you agree to be bound by these Terms &amp; Conditions ("Terms"). These Terms constitute a legally binding agreement between you ("User," "you," or "your") and Terminal Elearn, Inc. ("Company," "we," "us," or "our"). If you do not agree to these Terms, you must not access or use the Service.</p>
+      <p>You represent that you are at least 18 years of age and have the legal capacity to enter into a binding agreement.</p>
+
+      <h3>2. Description of Service</h3>
+      <p>Terminal Investor is a web-based subscription software platform that provides automated stock screening, ETF screening, bond ETF screening, AI-powered fundamental analysis, and PDF report generation. The Service is intended solely for research and educational purposes and does not constitute financial advice or investment management.</p>
+
+      <h3>3. Account Registration and Security</h3>
+      <p>You must register for an account to access the Service. You agree to provide accurate, current, and complete information during registration and to keep your account information up to date. You are responsible for safeguarding your password and for all activities that occur under your account. You must notify us immediately of any unauthorized use at <strong>legal@terminalelearn.com</strong>.</p>
+      <p>You may not share your account credentials, transfer your account to another person, or create accounts using automated means.</p>
+
+      <h3>4. Subscription and Payment</h3>
+      <p>Access to certain features requires a paid subscription. Subscription fees are billed in advance on the applicable billing cycle (monthly or annual) through Stripe, Inc. All fees are non-refundable except as expressly stated in Section 5 below.</p>
+      <p>We reserve the right to change subscription pricing with at least 30 days' notice. Continued use of the Service after a price change constitutes your acceptance of the new pricing.</p>
+      <p>Free trials, where offered, are limited to one per person or entity. We reserve the right to revoke trial access at any time.</p>
+
+      <h3>5. Cancellation and Refund Policy</h3>
+      <p>You may cancel your subscription at any time through your Account &amp; Billing settings. Upon cancellation, your access will continue until the end of the current billing period. We do not provide pro-rated refunds for partial billing periods.</p>
+      <p>We may, at our sole discretion, provide a refund within 7 days of initial purchase if the Service is materially non-functional and we are unable to resolve the issue. Refund requests must be submitted to <strong>legal@terminalelearn.com</strong>.</p>
+
+      <h3>6. Acceptable Use and Prohibited Conduct</h3>
+      <p>You agree not to:</p>
+      <ul>
+        <li>Use the Service for any unlawful purpose or in violation of any applicable law or regulation</li>
+        <li>Redistribute, resell, or commercially exploit screener outputs, reports, or any platform content without our written consent</li>
+        <li>Attempt to reverse-engineer, decompile, or extract source code from the platform</li>
+        <li>Scrape, crawl, or use automated tools to extract data from the platform without authorization</li>
+        <li>Interfere with or disrupt the integrity or performance of the Service or its infrastructure</li>
+        <li>Create multiple accounts to circumvent plan limitations or trial restrictions</li>
+        <li>Upload or transmit malicious code, viruses, or harmful content</li>
+        <li>Impersonate any person or entity or misrepresent your affiliation</li>
+      </ul>
+
+      <h3>7. Intellectual Property Rights</h3>
+      <p>The Service and all of its components — including software, algorithms, UI design, reports, logos, trademarks, and documentation — are the exclusive property of Terminal Elearn, Inc. and are protected by intellectual property laws. You are granted a limited, non-exclusive, non-transferable, revocable license to use the Service for your personal, non-commercial purposes in accordance with these Terms.</p>
+
+      <h3>8. Disclaimer of Warranties</h3>
+      <p>THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, OR UNINTERRUPTED ACCESS. WE DO NOT WARRANT THAT THE SERVICE WILL BE ERROR-FREE, THAT DEFECTS WILL BE CORRECTED, OR THAT THE SERVICE OR THE SERVERS THAT MAKE IT AVAILABLE ARE FREE OF VIRUSES OR OTHER HARMFUL COMPONENTS.</p>
+      <p>WE MAKE NO WARRANTY REGARDING THE ACCURACY, TIMELINESS, OR COMPLETENESS OF ANY FINANCIAL DATA OR AI-GENERATED ANALYSIS. SCREENER OUTPUTS ARE NOT INVESTMENT RECOMMENDATIONS.</p>
+
+      <h3>9. Limitation of Liability</h3>
+      <p>TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL TERMINAL ELEARN, INC., ITS OFFICERS, DIRECTORS, EMPLOYEES, AGENTS, OR LICENSORS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, PUNITIVE, OR EXEMPLARY DAMAGES, INCLUDING LOST PROFITS, INVESTMENT LOSSES, LOSS OF DATA, LOSS OF GOODWILL, OR BUSINESS INTERRUPTION ARISING OUT OF OR IN CONNECTION WITH THESE TERMS OR YOUR USE OF THE SERVICE.</p>
+      <p>Our total cumulative liability to you for any claim arising out of these Terms shall not exceed the greater of (a) the total fees paid by you to us in the three (3) months preceding the claim, or (b) USD $50.00.</p>
+
+      <h3>10. Indemnification</h3>
+      <p>You agree to defend, indemnify, and hold harmless Terminal Elearn, Inc. and its officers, directors, employees, and agents from and against any claims, liabilities, damages, losses, and expenses, including reasonable attorneys' fees, arising out of or in any way connected with: (a) your access to or use of the Service; (b) your violation of these Terms; (c) your violation of any third-party right, including intellectual property or privacy rights; or (d) any investment decisions you make based on information obtained through the Service.</p>
+
+      <h3>11. Governing Law and Dispute Resolution</h3>
+      <p>These Terms shall be governed by the laws of the State of Texas, without regard to conflict of law principles. Any dispute arising from these Terms or the Service shall first be subject to good-faith negotiation. If unresolved within 30 days, disputes shall be submitted to binding arbitration in Travis County, Texas, under the rules of the American Arbitration Association, except that either party may seek injunctive or equitable relief in a court of competent jurisdiction.</p>
+      <p>You waive any right to a jury trial and agree not to participate in a class action lawsuit or class-wide arbitration against the Company.</p>
+
+      <h3>12. Modifications to Terms</h3>
+      <p>We reserve the right to modify these Terms at any time. We will notify you of material changes by posting updated Terms with a new effective date and, where appropriate, by email. Your continued use of the Service after the effective date of changes constitutes acceptance of the revised Terms.</p>
+
+      <h3>13. Termination</h3>
+      <p>We may suspend or terminate your account and access to the Service at any time, with or without notice, for conduct that we believe violates these Terms or is harmful to other users, us, third parties, or for any other reason at our sole discretion. Upon termination, your license to use the Service immediately ceases.</p>
+
+      <h3>14. Entire Agreement</h3>
+      <p>These Terms, together with our Privacy Notice and Legal Notices, constitute the entire agreement between you and Terminal Elearn, Inc. with respect to the Service and supersede all prior agreements, representations, and understandings.</p>
+
+      <h3>15. Contact</h3>
+      <p>Questions about these Terms? Contact us at <strong>legal@terminalelearn.com</strong><br>Terminal Elearn, Inc. &nbsp;·&nbsp; 5900 Balcones Drive, Suite 100, Austin, TX 78731 &nbsp;·&nbsp; +1 (800) 837-6462</p>
+    </div>
+    <div class="legal-ftr">
+      <button class="btn btn-orange" onclick="closeLegalModal('terms')">Close</button>
+    </div>
+  </div>
 </div>
 
 <!-- ══════════════════════════════════════
@@ -2427,6 +2797,34 @@ function _showVerifyWallLink(url) {
   }
 }
 
+// ── Legal / Privacy / T&C Modals ───────────────────────────────────
+function openLegalModal(which) {
+  const el = document.getElementById('legal-overlay-' + which);
+  if (el) el.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeLegalModal(which) {
+  const el = document.getElementById('legal-overlay-' + which);
+  if (el) el.classList.remove('open');
+  // Only restore scroll if no other modal is open
+  const anyOpen = document.querySelector('.legal-overlay.open') || document.querySelector('.modal-overlay.open');
+  if (!anyOpen) document.body.style.overflow = '';
+}
+// Close legal overlays on Escape key
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.legal-overlay.open').forEach(el => {
+      const id = el.id.replace('legal-overlay-', '');
+      closeLegalModal(id);
+    });
+  }
+});
+// Set footer copyright year dynamically
+(function() {
+  const el = document.getElementById('footer-year');
+  if (el) el.textContent = new Date().getFullYear();
+})();
+
 // ── Auth Modal ─────────────────────────────────────────────────────
 function showAuthModal(tab) {
   switchAuthTab(tab || 'signin');
@@ -2627,26 +3025,84 @@ function updatePasswordStrength(inputId, strengthId) {
   strengthEl.innerHTML = `<span style="color: ${level.color};">${level.label}${tips}</span>`;
 }
 
+// ── REGISTER — field-level validation helpers ───────────────────────
+const _REG_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function _setRegFieldError(inputId, msg) {
+  const inp = document.getElementById(inputId);
+  const err = document.getElementById(inputId + '-error');
+  if (inp) inp.classList.add('input-error');
+  if (err) { err.textContent = msg; err.classList.add('visible'); }
+}
+
+function _clearRegField(inputId) {
+  const inp = document.getElementById(inputId);
+  const err = document.getElementById(inputId + '-error');
+  if (inp) inp.classList.remove('input-error');
+  if (err) { err.textContent = ''; err.classList.remove('visible'); }
+}
+
+function _blurValidateRegEmail() {
+  const val = (document.getElementById('r-email').value || '').trim();
+  if (val && !_REG_EMAIL_RE.test(val)) {
+    _setRegFieldError('r-email', '✗ Please enter a valid email address (e.g. you@example.com)');
+  }
+}
+
 // ── REGISTER — real POST /auth/register ────────────────────────────
 async function doRegister() {
   const name  = (document.getElementById('r-name').value  || '').trim();
   const email = (document.getElementById('r-email').value || '').trim();
   const pwd   =  document.getElementById('r-pwd').value   || '';
-  const disclaimer = document.getElementById('r-disclaimer');
+  const disclaimer    = document.getElementById('r-disclaimer');
   const disclaimerError = document.getElementById('r-disclaimer-error');
 
-  if (!name || !email || !pwd) { showToast('Please fill in all fields', 'error'); return; }
-  if (pwd.length < 12)          { showToast('Password must be at least 12 characters', 'error'); return; }
+  // ── Clear previous field errors ──────────────────────────────────
+  ['r-name', 'r-email', 'r-pwd'].forEach(_clearRegField);
+  if (disclaimerError) disclaimerError.style.display = 'none';
 
-  // Check if disclaimer is checked
-  if (!disclaimer || !disclaimer.checked) {
-    if (disclaimerError) disclaimerError.style.display = 'block';
-    showToast('Please agree to the disclaimer to create an account', 'error');
-    return;
+  let hasError = false;
+
+  // Full name
+  if (!name) {
+    _setRegFieldError('r-name', '✗ Full name is required');
+    hasError = true;
+  } else if (name.length < 2) {
+    _setRegFieldError('r-name', '✗ Name must be at least 2 characters');
+    hasError = true;
+  } else if (name.length > 100) {
+    _setRegFieldError('r-name', '✗ Name must be 100 characters or fewer');
+    hasError = true;
+  } else if (!/^[\p{L}\p{M}'\-\.\s]+$/u.test(name)) {
+    _setRegFieldError('r-name', '✗ Name may only contain letters, spaces, hyphens and apostrophes');
+    hasError = true;
   }
 
-  // Clear error message if checkbox is now checked
-  if (disclaimerError) disclaimerError.style.display = 'none';
+  // Email
+  if (!email) {
+    _setRegFieldError('r-email', '✗ Email address is required');
+    hasError = true;
+  } else if (!_REG_EMAIL_RE.test(email)) {
+    _setRegFieldError('r-email', '✗ Please enter a valid email address (e.g. you@example.com)');
+    hasError = true;
+  }
+
+  // Password
+  if (!pwd) {
+    _setRegFieldError('r-pwd', '✗ Password is required');
+    hasError = true;
+  } else if (pwd.length < 12) {
+    _setRegFieldError('r-pwd', `✗ Password must be at least 12 characters (currently ${pwd.length})`);
+    hasError = true;
+  }
+
+  // Disclaimer
+  if (!disclaimer || !disclaimer.checked) {
+    if (disclaimerError) disclaimerError.style.display = 'block';
+    hasError = true;
+  }
+
+  if (hasError) return;
 
   const btn = document.querySelector('#auth-pane-register .submit-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Creating account…'; }
@@ -2657,8 +3113,19 @@ async function doRegister() {
   if (btn) { btn.disabled = false; btn.textContent = 'Start Free Trial →'; }
 
   if (!ok) {
-    const msg = data.error || (status === 409 ? 'An account with that email already exists.' : 'Registration failed. Please try again.');
-    showToast(msg, 'error');
+    if (status === 409) {
+      // Email already in use — show inline on the email field
+      _setRegFieldError('r-email', '✗ An account with this email already exists. Try signing in instead.');
+    } else if (data.fields) {
+      // Server returned per-field validation errors
+      Object.entries(data.fields).forEach(([field, msg]) => {
+        const id = field === 'email' ? 'r-email' : field === 'password' ? 'r-pwd' : field === 'full_name' ? 'r-name' : null;
+        if (id) _setRegFieldError(id, `✗ ${msg}`);
+        else showToast(`✗ ${msg}`, 'error');
+      });
+    } else {
+      showToast(data.error || 'Registration failed. Please try again.', 'error');
+    }
     return;
   }
 
@@ -3550,6 +4017,8 @@ async function choosePlan(planName) {
 }
 
 function contactSales() {
+  // Pre-fill email if user is already logged in
+  const prefillEmail = (window._user && window._user.email) ? window._user.email : '';
   showModal(
     'Enterprise Sales',
     `<p style="margin-bottom:16px">Our team will set up a personalised demo and quote for your organisation.</p>
@@ -3557,19 +4026,22 @@ function contactSales() {
      <input type="text" class="modal-select" id="sales-name" placeholder="">
      <label class="modal-label">Company / Fund name</label>
      <input type="text" class="modal-select" id="sales-company" placeholder="Acme Capital">
+     <label class="modal-label">Your email</label>
+     <input type="email" class="modal-select" id="sales-email" placeholder="you@company.com" value="${prefillEmail}">
      <label class="modal-label">Message</label>
      <textarea class="modal-select" id="sales-msg" rows="3" style="resize:vertical" placeholder="Tell us about your use case…"></textarea>`,
     [
       { label: 'Send Inquiry', cls: 'btn-orange', action: async () => {
           const name    = (document.getElementById('sales-name')?.value || '').trim();
           const company = (document.getElementById('sales-company')?.value || '').trim();
+          const email   = (document.getElementById('sales-email')?.value || '').trim();
           const message = (document.getElementById('sales-msg')?.value || '').trim();
           if (!name || !message) {
             showToast('Please fill in your name and message.', 'error');
             return;
           }
           closeModal();
-          const { ok, data } = await _api('POST', '/billing/enterprise-inquiry', { name, company, message });
+          const { ok, data } = await _api('POST', '/billing/enterprise-inquiry', { name, company, email, message });
           if (ok) {
             showToast('Inquiry sent! Our team will contact you within 24h.', 'success');
           } else {

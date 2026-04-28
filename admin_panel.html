@@ -169,6 +169,23 @@
   .btn-danger:hover { background: rgba(248,81,73,.1); }
   .btn-green { background: rgba(63,185,80,.15); border-color: rgba(63,185,80,.4); color: var(--green); }
   .btn-green:hover { background: rgba(63,185,80,.25); }
+  .btn-danger-solid { background: var(--red); border-color: var(--red); color: #fff; }
+  .btn-danger-solid:hover { opacity: .85; }
+  .bulk-bar { display:none; align-items:center; gap:10px; }
+  .bulk-bar.visible { display:flex; }
+  .bulk-count { font-size:.82rem; color:var(--muted); white-space:nowrap; }
+  .user-chk { width:15px; height:15px; cursor:pointer; accent-color:var(--red); }
+  th.chk-col, td.chk-col { width:36px; text-align:center; padding-left:12px; }
+  th.filterable { vertical-align:top; padding-bottom:6px; }
+  .th-label { display:block; margin-bottom:5px; white-space:nowrap; }
+  .col-filter {
+    display:block; width:100%; min-width:90px;
+    background:var(--surface2); border:1px solid var(--border); color:var(--text);
+    border-radius:5px; font-size:.72rem; padding:3px 6px; cursor:pointer;
+    outline:none; transition:border-color .15s;
+  }
+  .col-filter:focus, .col-filter:hover { border-color:var(--gold); }
+  .col-filter.active { border-color:var(--gold); color:var(--gold); background:rgba(240,165,0,.08); }
 
   /* Modal */
   .modal-overlay {
@@ -190,6 +207,20 @@
   .modal select:focus { border-color: var(--gold); }
   .modal-error { color: var(--red); font-size: .82rem; margin-top: 8px; }
   .modal-success { color: var(--green); font-size: .82rem; margin-top: 8px; }
+
+  /* Confirm dialog */
+  #confirm-overlay { z-index:300; }
+  .confirm-box {
+    background:var(--bg2); border:1px solid var(--border); border-radius:14px;
+    padding:32px 28px 24px; width:400px; max-width:92vw; text-align:center;
+    animation: fadeUp .18s ease;
+  }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+  .confirm-icon { font-size:2.2rem; margin-bottom:12px; }
+  .confirm-title { font-size:1.05rem; font-weight:700; margin-bottom:8px; }
+  .confirm-msg { color:var(--muted); font-size:.88rem; line-height:1.6; margin-bottom:24px; }
+  .confirm-actions { display:flex; gap:10px; justify-content:center; }
+  .confirm-actions .btn { min-width:100px; justify-content:center; }
 
   /* Toast */
   #toast {
@@ -343,26 +374,53 @@
             <h2>👥 All Users</h2>
             <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
               <input class="search-bar" id="user-search" placeholder="Search email or name…" oninput="filterUsers()" style="width:200px">
-              <select id="plan-filter" class="search-bar" style="width:140px" onchange="filterUsers()">
-                <option value="">All Plans</option>
-                <option value="trial">Trial</option>
-                <option value="starter">Starter</option>
-                <option value="pro">Pro</option>
-                <option value="advanced">Advanced</option>
-                <option value="analyst">Analyst</option>
-                <option value="enterprise">Enterprise</option>
-              </select>
+              <button class="btn btn-outline btn-sm" onclick="clearAllFilters()" title="Clear all column filters">✕ Clear Filters</button>
               <button class="btn btn-gold btn-sm" onclick="openCreateUserModal()">+ New User</button>
+              <div class="bulk-bar" id="bulk-bar">
+                <span class="bulk-count" id="bulk-count">0 selected</span>
+                <button class="btn btn-danger-solid btn-sm" onclick="bulkDeleteSelected()">🗑 Delete Selected</button>
+                <button class="btn btn-outline btn-sm" onclick="clearBulkSelection()">✕ Clear</button>
+              </div>
             </div>
           </div>
           <div style="overflow-x:auto">
             <table>
               <thead>
                 <tr>
+                  <th class="chk-col"><input type="checkbox" id="chk-all" class="user-chk" onchange="toggleSelectAll(this)" title="Select all"></th>
                   <th>User</th>
-                  <th>Plan</th>
-                  <th>Status</th>
-                  <th>Email Verified</th>
+                  <th class="filterable">
+                    <span class="th-label">PLAN</span>
+                    <select id="col-filter-plan" class="col-filter" onchange="filterUsers(); updateColFilterStyle(this)">
+                      <option value="">All</option>
+                      <option value="trial">Trial</option>
+                      <option value="starter">Starter</option>
+                      <option value="pro">Pro</option>
+                      <option value="advanced">Advanced</option>
+                      <option value="analyst">Analyst</option>
+                      <option value="enterprise">Enterprise</option>
+                    </select>
+                  </th>
+                  <th class="filterable">
+                    <span class="th-label">STATUS</span>
+                    <select id="col-filter-status" class="col-filter" onchange="filterUsers(); updateColFilterStyle(this)">
+                      <option value="">All</option>
+                      <option value="active">Active</option>
+                      <option value="trial">Trial</option>
+                      <option value="inactive">Inactive</option>
+                      <option value="cancelled">Cancelled</option>
+                      <option value="expired">Expired</option>
+                      <option value="pending_payment">Pending Payment</option>
+                    </select>
+                  </th>
+                  <th class="filterable">
+                    <span class="th-label">EMAIL VERIFIED</span>
+                    <select id="col-filter-verified" class="col-filter" onchange="filterUsers(); updateColFilterStyle(this)">
+                      <option value="">All</option>
+                      <option value="yes">✅ Verified</option>
+                      <option value="no">❌ Unverified</option>
+                    </select>
+                  </th>
                   <th>Daily Runs Today</th>
                   <th>Created</th>
                   <th>Actions</th>
@@ -757,20 +815,42 @@ async function loadUsers() {
 }
 
 function filterUsers() {
-  var q    = (document.getElementById('user-search').value || '').toLowerCase();
-  var plan = document.getElementById('plan-filter').value;
+  var q        = (document.getElementById('user-search').value || '').toLowerCase();
+  var plan     = (document.getElementById('col-filter-plan')     ? document.getElementById('col-filter-plan').value     : '');
+  var status   = (document.getElementById('col-filter-status')   ? document.getElementById('col-filter-status').value   : '');
+  var verified = (document.getElementById('col-filter-verified') ? document.getElementById('col-filter-verified').value : '');
+
   _filteredUsers = _users.filter(function(u) {
-    var mq   = !q    || (u.email||'').toLowerCase().includes(q) || (u.full_name||'').toLowerCase().includes(q);
-    var mp   = !plan || (u.plan_name||'').toLowerCase() === plan;
-    return mq && mp;
+    var mq = !q        || (u.email||'').toLowerCase().includes(q) || (u.full_name||'').toLowerCase().includes(q);
+    var mp = !plan     || (u.plan_name||'').toLowerCase() === plan;
+    var ms = !status   || (u.status||'').toLowerCase() === status;
+    var mv = !verified || (verified === 'yes'
+               ? (u.email_verified === true || u.email_verified === 'true')
+               : (u.email_verified !== true && u.email_verified !== 'true'));
+    return mq && mp && ms && mv;
   });
   renderUsers();
 }
 
+function updateColFilterStyle(sel) {
+  if (sel.value) sel.classList.add('active');
+  else           sel.classList.remove('active');
+}
+
+function clearAllFilters() {
+  ['col-filter-plan','col-filter-status','col-filter-verified'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) { el.value = ''; el.classList.remove('active'); }
+  });
+  document.getElementById('user-search').value = '';
+  filterUsers();
+}
+
 function renderUsers() {
   var tbody = document.getElementById('users-tbody');
+  clearBulkSelection && clearBulkSelection();
   if (!_filteredUsers.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:32px">No users found</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:32px">No users found</td></tr>';
     return;
   }
   tbody.innerHTML = _filteredUsers.map(function(u) {
@@ -782,6 +862,7 @@ function renderUsers() {
       ? '<span style="color:var(--green);font-weight:600;font-size:.75rem">✅ Verified</span>'
       : '<span style="color:var(--red);font-weight:600;font-size:.75rem">❌ Unverified</span>';
     return '<tr>'
+      + '<td class="chk-col"><input type="checkbox" class="user-chk" data-uid="' + uid + '" onchange="updateBulkBar()"></td>'
       + '<td><div style="font-weight:600">' + emailSafe + '</div>'
       + '<div style="color:var(--muted);font-size:.78rem">' + esc(u.full_name || '—') + '</div></td>'
       + '<td>' + planBadge(u.plan_name) + '</td>'
@@ -1043,13 +1124,69 @@ async function doExtendTrial() {
   loadUsers();
 }
 
+// ── Bulk select / delete ─────────────────────────────────────────────────────
+function toggleSelectAll(cb) {
+  document.querySelectorAll('.user-chk[data-uid]').forEach(function(c) { c.checked = cb.checked; });
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  var checked = document.querySelectorAll('.user-chk[data-uid]:checked').length;
+  var total   = document.querySelectorAll('.user-chk[data-uid]').length;
+  var bar     = document.getElementById('bulk-bar');
+  var countEl = document.getElementById('bulk-count');
+  var chkAll  = document.getElementById('chk-all');
+  if (checked > 0) {
+    bar.classList.add('visible');
+    countEl.textContent = checked + ' of ' + total + ' selected';
+    chkAll.indeterminate = checked > 0 && checked < total;
+    chkAll.checked = checked === total;
+  } else {
+    bar.classList.remove('visible');
+    chkAll.indeterminate = false;
+    chkAll.checked = false;
+  }
+}
+
+function clearBulkSelection() {
+  document.querySelectorAll('.user-chk').forEach(function(c) { c.checked = false; c.indeterminate = false; });
+  document.getElementById('bulk-bar').classList.remove('visible');
+}
+
+async function bulkDeleteSelected() {
+  var checked = Array.from(document.querySelectorAll('.user-chk[data-uid]:checked'));
+  if (!checked.length) return;
+  var count = checked.length;
+  var ids   = checked.map(function(c) { return c.dataset.uid; });
+  showConfirm(
+    '🗑',
+    'Delete ' + count + ' user' + (count > 1 ? 's' : '') + '?',
+    'This will <strong>permanently remove</strong> ' + count + ' user' + (count > 1 ? 's' : '') + ' and all their data.<br>This action <strong>cannot be undone</strong>.',
+    'Delete ' + count + ' User' + (count > 1 ? 's' : ''),
+    async function() {
+      var r = await _api('POST', '/admin/api/users/bulk-delete', { user_ids: ids });
+      if (!r.ok) { showToast(r.data.error || 'Bulk delete failed', 'error'); return; }
+      showToast((r.data.deleted || count) + ' user' + ((r.data.deleted || count) > 1 ? 's' : '') + ' deleted', 'success');
+      clearBulkSelection();
+      loadUsers();
+    }
+  );
+}
+
 function confirmDelete(uid, email) {
-  if (!confirm('Delete user "' + email + '"?\n\nThis is PERMANENT and cannot be undone.')) return;
-  _api('DELETE', '/admin/api/users/' + uid).then(function(r) {
-    if (!r.ok) { showToast(r.data.error || 'Delete failed', 'error'); return; }
-    showToast('User ' + email + ' deleted', 'success');
-    loadUsers();
-  });
+  showConfirm(
+    '⚠️',
+    'Delete user?',
+    'Permanently delete <strong>' + email + '</strong> and all their data?<br>This action <strong>cannot be undone</strong>.',
+    'Delete User',
+    function() {
+      _api('DELETE', '/admin/api/users/' + uid).then(function(r) {
+        if (!r.ok) { showToast(r.data.error || 'Delete failed', 'error'); return; }
+        showToast('User ' + email + ' deleted', 'success');
+        loadUsers();
+      });
+    }
+  );
 }
 
 function closeModal(id) {
@@ -1085,6 +1222,46 @@ function showToast(msg, type) {
   clearTimeout(el._t);
   el._t = setTimeout(function() { el.classList.remove('show'); }, 3500);
 }
+
+// ── In-app confirm dialog (replaces browser confirm()) ────────────────────────
+var _confirmCallback = null;
+
+function showConfirm(icon, title, msg, confirmLabel, onConfirm) {
+  document.getElementById('confirm-icon').textContent    = icon;
+  document.getElementById('confirm-title').textContent   = title;
+  document.getElementById('confirm-msg').innerHTML       = msg;
+  document.getElementById('confirm-ok-btn').textContent  = confirmLabel || 'Confirm';
+  _confirmCallback = onConfirm;
+  document.getElementById('confirm-overlay').classList.remove('hidden');
+}
+
+function _confirmOk() {
+  document.getElementById('confirm-overlay').classList.add('hidden');
+  if (typeof _confirmCallback === 'function') _confirmCallback();
+  _confirmCallback = null;
+}
+
+function _confirmCancel() {
+  document.getElementById('confirm-overlay').classList.add('hidden');
+  _confirmCallback = null;
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') _confirmCancel();
+});
 </script>
+
+<!-- In-app confirm dialog -->
+<div class="modal-overlay hidden" id="confirm-overlay" onclick="if(event.target===this)_confirmCancel()">
+  <div class="confirm-box">
+    <div class="confirm-icon" id="confirm-icon">🗑</div>
+    <div class="confirm-title" id="confirm-title"></div>
+    <div class="confirm-msg" id="confirm-msg"></div>
+    <div class="confirm-actions">
+      <button class="btn btn-outline" onclick="_confirmCancel()">Cancel</button>
+      <button class="btn btn-danger-solid" id="confirm-ok-btn" onclick="_confirmOk()">Delete</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
