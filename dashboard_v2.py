@@ -357,6 +357,32 @@ def _get_run_state(user_id: "str | None" = None) -> dict:
     if not user_id:
         return _default_run_state()
     state = dict(_user_run_states.get(user_id, _default_run_state()))
+
+    # Cross-worker persistence: a different Gunicorn worker may have finished
+    # the run and written last_completed_at / run_summary to disk while this
+    # worker's in-memory dict still has the stale pre-run snapshot.
+    # Always sync from disk when the fields are absent so every worker shows
+    # the correct "Last Run" KPI card values.
+    if not state.get("last_completed_at") or not state.get("run_summary"):
+        try:
+            sf = _user_state_file(user_id)
+            if os.path.exists(sf):
+                with open(sf) as _dsf:
+                    saved = json.load(_dsf)
+                if not state.get("last_completed_at") and saved.get("last_completed_at"):
+                    state["last_completed_at"] = saved["last_completed_at"]
+                if not state.get("run_summary") and saved.get("run_summary"):
+                    state["run_summary"] = saved["run_summary"]
+                # Back-fill this worker's in-memory dict so subsequent requests are
+                # served from memory without a disk read.
+                mem = _user_run_states.setdefault(user_id, _default_run_state())
+                if not mem.get("last_completed_at") and saved.get("last_completed_at"):
+                    mem["last_completed_at"] = saved["last_completed_at"]
+                if not mem.get("run_summary") and saved.get("run_summary"):
+                    mem["run_summary"] = saved["run_summary"]
+        except Exception as _dse:
+            logger.debug("Could not sync run state from disk for %s: %s", user_id, _dse)
+
     # Cross-worker: if this Gunicorn worker has no memory of the run, check the
     # PID file written by whichever worker actually launched the subprocess.
     if not state.get("running"):
