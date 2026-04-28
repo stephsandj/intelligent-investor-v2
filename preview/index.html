@@ -2433,8 +2433,18 @@ function nav(id) {
   // page, not a screen-section. Writing it causes a blank dashboard on next login
   // because sidebarNav('account') has no matching _showScreenSection branch.
 
-  // Lazy-load data when navigating to dashboard
-  if (id === 'dashboard') _loadDashboard();
+  // Lazy-load data when navigating to dashboard.
+  // Also ensure at least one screen section is active — if none is (e.g. user
+  // navigated to Account & Billing first and sidebarNav was never called),
+  // activate the saved section so the content area is never blank.
+  if (id === 'dashboard') {
+    const anyActive = document.querySelector('#page-dashboard .screen-section.active');
+    if (!anyActive) {
+      const sec = _safeSection(localStorage.getItem('ii_sidebar_section') || 'stocks');
+      _showScreenSection(sec);
+    }
+    _loadDashboard();
+  }
   if (id === 'account')   _refreshAccountPage();
 }
 
@@ -2573,6 +2583,11 @@ async function _restoreSession() {
     const savedView    = localStorage.getItem('ii_active_view') || 'dashboard';
     const savedSection = _safeSection(localStorage.getItem('ii_sidebar_section') || 'stocks');
     if (savedView === 'account') {
+      // Prime the active screen section so that the Dashboard page is fully
+      // rendered when the user clicks the Dashboard tab after viewing billing.
+      // We call _showScreenSection directly (not sidebarNav) to avoid
+      // overwriting the 'account' value in localStorage.
+      _showScreenSection(savedSection);
       nav('account');
     } else {
       nav(savedView);
