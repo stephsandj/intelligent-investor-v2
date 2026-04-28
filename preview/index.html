@@ -2510,7 +2510,15 @@ async function _restoreSession() {
 
   // Handle email verification redirect params
   const params = new URLSearchParams(window.location.search);
-  if (params.get('payment_success') === '1') {
+  if (params.get('portal_return') === '1') {
+    // Stripe Billing Portal redirect back. The browser may have restored a
+    // bfcache snapshot of the previous session instead of re-running JS,
+    // which leaves the content area blank. Strip the param and do ONE hard
+    // reload so the page initialises cleanly from scratch.
+    history.replaceState({}, '', '/');
+    window.location.reload();
+    return;
+  } else if (params.get('payment_success') === '1') {
     // Store flag in sessionStorage, clear URL, then do ONE clean reload.
     // This eliminates the blank-page flash: the reloaded page starts fresh
     // (no Stripe URL param) and picks up the flag from sessionStorage below.

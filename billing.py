@@ -156,7 +156,7 @@ def create_customer_portal_session(stripe_customer_id: str) -> str:
     try:
         session = stripe.billing_portal.Session.create(
             customer=stripe_customer_id,
-            return_url=base_url,
+            return_url=f"{base_url}/?portal_return=1",
         )
         return session.url
     except stripe.error.StripeError as exc:
