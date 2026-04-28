@@ -343,6 +343,12 @@ CREATE TABLE IF NOT EXISTS admin_accounts (
     last_login_at TIMESTAMPTZ,
     last_login_ip INET
 );
+
+-- Refresh-token rotation: store a SHA-256 hash of the most recently issued
+-- refresh token for each user. On /auth/refresh the incoming token is hashed
+-- and compared; a mismatch means the token was already rotated (possible theft).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS refresh_token_hash  VARCHAR(64);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS refresh_token_issued TIMESTAMPTZ;
 """
 
 
@@ -468,6 +474,43 @@ def clear_password_reset_token(user_id: str) -> None:
             "UPDATE users SET reset_token = NULL, reset_token_expires = NULL WHERE id = %s",
             (user_id,),
         )
+
+
+def store_refresh_token_hash(user_id: str, token_hash: str) -> None:
+    """Persist the SHA-256 hash of the current refresh token for rotation checks."""
+    with db_cursor() as cur:
+        cur.execute(
+            """UPDATE users
+               SET refresh_token_hash = %s, refresh_token_issued = NOW()
+               WHERE id = %s""",
+            (token_hash, user_id),
+        )
+
+
+def verify_and_rotate_refresh_token(user_id: str, incoming_hash: str) -> bool:
+    """
+    Return True if incoming_hash matches the stored hash, then clear it so the
+    same token can never be reused (rotation).  Returns False on mismatch —
+    which may indicate token theft; callers should invalidate the session.
+    """
+    with db_cursor() as cur:
+        cur.execute(
+            "SELECT refresh_token_hash FROM users WHERE id = %s",
+            (user_id,),
+        )
+        row = cur.fetchone()
+        if not row or not row["refresh_token_hash"]:
+            # No hash stored yet (legacy session pre-rotation) — accept once
+            # and let the caller store a new hash going forward.
+            return True
+        if row["refresh_token_hash"] != incoming_hash:
+            return False
+        # Clear immediately so the same token cannot be reused
+        cur.execute(
+            "UPDATE users SET refresh_token_hash = NULL WHERE id = %s",
+            (user_id,),
+        )
+        return True
 
 
 def update_user_profile(user_id: str, full_name: Optional[str] = None, email: Optional[str] = None) -> None:

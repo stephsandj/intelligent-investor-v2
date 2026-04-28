@@ -117,7 +117,7 @@ def admin_login():
     }))
     resp.set_cookie(
         "admin_access", token,
-        httponly=True, samesite="Lax", secure=False,
+        httponly=True, samesite="Lax", secure=True,   # must be True in prod — HTTPS only
         max_age=8 * 3600,
         path="/admin",
     )

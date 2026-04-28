@@ -1971,8 +1971,8 @@
             <div class="section-title" style="margin-top:18px">Session Security</div>
             <div class="card" style="padding:16px 18px">
               <div style="font-size:.78rem;color:var(--muted);line-height:1.9">
-                <div>• Auto sign-out after <strong style="color:var(--text)">5 minutes</strong> of inactivity</div>
-                <div>• Session tokens expire after <strong style="color:var(--text)">15 minutes</strong> of last activity</div>
+                <div>• Auto sign-out after <strong style="color:var(--text)">15 minutes</strong> of inactivity</div>
+                <div>• Session tokens expire after <strong style="color:var(--text)">115 minutes</strong> of last activity</div>
                 <div>• All sessions are encrypted and logged</div>
               </div>
             </div>
@@ -3290,16 +3290,31 @@ async function _proceedWithLogout() {
   _api('POST', '/auth/logout').catch(() => {});
 }
 
-// ── SESSION INACTIVITY TIMEOUT (5 minutes) ────────────────────────
-const SESSION_INACTIVITY_MS = 5 * 60 * 1000; // 5 minutes
-let _inactivityTimer = null;
-let _lastActivityTime = Date.now();
+// ── SESSION INACTIVITY TIMEOUT (115 minutes) ───────────────────────
+// 15 min matches trading-platform standards (Schwab, Fidelity, IBKR).
+// A 1-minute warning toast gives the user a chance to stay signed in.
+const SESSION_INACTIVITY_MS   = 15 * 60 * 1000; // 115 minutes
+const SESSION_INACTIVITY_WARN =  14 * 60 * 1000; // warn at 14 minutes
+let _inactivityTimer     = null;
+let _inactivityWarnTimer = null;
+let _lastActivityTime    = Date.now();
 
 function _resetInactivityTimer() {
   if (!_currentUser) return; // Only track if logged in
   _lastActivityTime = Date.now();
 
-  if (_inactivityTimer) clearTimeout(_inactivityTimer);
+  if (_inactivityTimer)     clearTimeout(_inactivityTimer);
+  if (_inactivityWarnTimer) clearTimeout(_inactivityWarnTimer);
+
+  // 1-minute warning before logout
+  _inactivityWarnTimer = setTimeout(() => {
+    if (!_currentUser) return;
+    const anyRunActive = _isRunning === true || _etf_state?.running === true || _bond_state?.running === true;
+    if (!anyRunActive) {
+      showToast('Session expires in 1 minute due to inactivity — move your mouse to stay signed in.', 'warning');
+    }
+  }, SESSION_INACTIVITY_WARN);
+
   _inactivityTimer = setTimeout(() => {
     if (_currentUser) {
       // Check if any screenings are active — don't logout during a run
@@ -3310,7 +3325,7 @@ function _resetInactivityTimer() {
         return;
       }
       // No active runs — proceed with inactivity logout
-      showToast('⏱️ Session expired due to inactivity. Please sign in again.', 'warning');
+      showToast('Session expired due to inactivity. Please sign in again.', 'warning');
       _forceLogout();
     }
   }, SESSION_INACTIVITY_MS);
@@ -3337,8 +3352,10 @@ function _startActivityTracking() {
 
 // Stop tracking when user logs out
 function _stopActivityTracking() {
-  if (_inactivityTimer) clearTimeout(_inactivityTimer);
-  _inactivityTimer = null;
+  if (_inactivityTimer)     clearTimeout(_inactivityTimer);
+  if (_inactivityWarnTimer) clearTimeout(_inactivityWarnTimer);
+  _inactivityTimer     = null;
+  _inactivityWarnTimer = null;
 }
 
 // ── Admin Panel ────────────────────────────────────────────────────
@@ -6824,8 +6841,8 @@ async function _openSettingsModal() {
 
       <div style="padding-top:14px;border-top:1px solid var(--border);font-size:.8rem;color:var(--muted);line-height:1.6">
         <div style="margin-bottom:10px"><strong>Session Security:</strong></div>
-        <div>• Automatic sign-out after <strong>5 minutes of inactivity</strong></div>
-        <div>• Session tokens expire after <strong>15 minutes</strong> of last activity</div>
+        <div>• Automatic sign-out after <strong>15 minutes of inactivity</strong></div>
+        <div>• Session tokens expire after <strong>115 minutes</strong> of last activity</div>
         <div>• All sessions are encrypted and logged</div>
       </div>
     </div>
@@ -7007,7 +7024,7 @@ function _badgeHtml(status) {
 _restoreSession();
 
 // NOTE: No beforeunload auto-logout — page refresh would incorrectly sign users out.
-// Access tokens expire naturally after 15 minutes; the refresh token handles re-auth.
+// Access tokens expire naturally after 115 minutes; the refresh token handles re-auth.
 </script>
 </body>
 </html>

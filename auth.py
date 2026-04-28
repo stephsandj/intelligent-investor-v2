@@ -17,6 +17,7 @@ for _pkg, _import in [("PyJWT", "jwt"), ("bcrypt", "bcrypt")]:
 import jwt
 import bcrypt
 
+import hashlib
 import logging
 import os
 import re
@@ -50,7 +51,7 @@ def _jwt_secret() -> str:
 
 JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = 15
-REFRESH_TOKEN_EXPIRE_DAYS = 30
+REFRESH_TOKEN_EXPIRE_DAYS = 14  # 30→14 days — industry standard for financial SaaS
 
 # ---------------------------------------------------------------------------
 # Password helpers
@@ -71,6 +72,11 @@ def check_password(plain: str, hashed: str) -> bool:
 # Token helpers
 # ---------------------------------------------------------------------------
 
+def _hash_token(token: str) -> str:
+    """SHA-256 hex digest of a JWT string — used for refresh-token rotation checks."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
 def generate_tokens(user_id: str) -> Dict[str, str]:
     now = datetime.now(tz=timezone.utc)
     access_payload = {
@@ -87,7 +93,7 @@ def generate_tokens(user_id: str) -> Dict[str, str]:
     }
     secret = _jwt_secret()
     return {
-        "access_token": jwt.encode(access_payload, secret, algorithm=JWT_ALGORITHM),
+        "access_token":  jwt.encode(access_payload,  secret, algorithm=JWT_ALGORITHM),
         "refresh_token": jwt.encode(refresh_payload, secret, algorithm=JWT_ALGORITHM),
     }
 
@@ -843,6 +849,11 @@ def register():
         logger.error("register: send verification email failed: %s", exc)
 
     tokens = generate_tokens(user_id)
+    # Store refresh token hash for rotation validation on next /auth/refresh call
+    try:
+        models.store_refresh_token_hash(user_id, _hash_token(tokens["refresh_token"]))
+    except Exception as exc:
+        logger.error("register: store refresh token hash failed: %s", exc)
 
     models.log_audit(
         user_id=user_id,
@@ -947,6 +958,11 @@ def login():
             }), 403
 
     tokens = generate_tokens(str(user["id"]))
+    # Store refresh token hash for rotation validation on next /auth/refresh call
+    try:
+        models.store_refresh_token_hash(str(user["id"]), _hash_token(tokens["refresh_token"]))
+    except Exception as exc:
+        logger.error("login: store refresh token hash failed: %s", exc)
 
     models.log_audit(
         user_id=str(user["id"]),
@@ -972,7 +988,19 @@ def login():
 
 @auth_bp.route("/logout", methods=["POST"])
 def logout():
-    """POST /auth/logout — Clear cookies and confirm logout."""
+    """POST /auth/logout — Clear cookies and invalidate refresh token hash."""
+    # Invalidate the stored refresh token hash so the cookie (still held by
+    # the browser until it expires) cannot be replayed after logout.
+    token = request.cookies.get("refresh_token", "")
+    if token:
+        try:
+            payload = decode_token(token)
+            user_id = payload.get("sub")
+            if user_id:
+                models.store_refresh_token_hash(user_id, "")
+        except Exception:
+            pass  # expired or invalid token — nothing to invalidate
+
     response = jsonify({"ok": True})
     response.delete_cookie("access_token",  path="/", samesite="Lax")
     response.delete_cookie("refresh_token", path="/", samesite="Lax")
@@ -1110,7 +1138,15 @@ def verify_reset_token():
 
 @auth_bp.route("/refresh", methods=["POST"])
 def refresh():
-    """POST /auth/refresh — Exchange a refresh token for a new access token."""
+    """POST /auth/refresh — Rotate refresh token and issue a new access token.
+
+    Implements refresh-token rotation per OWASP ASVS 3.3:
+      1. Verify the incoming refresh JWT is valid and not expired.
+      2. Hash the token and compare against the stored hash in DB.
+         - Mismatch = already-rotated token (potential theft) → reject + clear hash.
+      3. Issue brand-new access + refresh tokens, persist new hash.
+      4. Return both tokens via HttpOnly cookies.
+    """
     data          = request.get_json(silent=True) or {}
     # Accept refresh token from either body or HttpOnly cookie
     refresh_token = data.get("refresh_token", "").strip() or request.cookies.get("refresh_token", "")
@@ -1132,16 +1168,47 @@ def refresh():
     if not models.get_user_by_id(user_id):
         return jsonify({"error": "User not found"}), 401
 
-    now = datetime.now(tz=timezone.utc)
-    new_access_token = jwt.encode(
-        {"sub": user_id, "type": "access", "iat": now,
-         "exp": now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)},
-        _jwt_secret(), algorithm=JWT_ALGORITHM,
-    )
-    resp = jsonify({"access_token": new_access_token})
-    resp.set_cookie("access_token", new_access_token,
+    # ── Rotation check ────────────────────────────────────────────────
+    incoming_hash = _hash_token(refresh_token)
+    try:
+        valid = models.verify_and_rotate_refresh_token(user_id, incoming_hash)
+    except Exception as exc:
+        logger.error("refresh: rotation DB check failed for %s: %s", user_id, exc)
+        valid = True  # degrade gracefully — allow this refresh if DB check errors
+
+    if not valid:
+        # Token already rotated — possible replay/theft. Clear stored hash so
+        # all subsequent refresh attempts also fail until the user re-logs in.
+        try:
+            models.store_refresh_token_hash(user_id, "")
+        except Exception:
+            pass
+        logger.warning(
+            "refresh: rotated-token reuse detected for user %s (possible token theft) "
+            "— session invalidated", user_id[:8]
+        )
+        models.log_audit(
+            user_id=user_id,
+            action="refresh_token_reuse_detected",
+            details_dict={"note": "Rotated refresh token reused — session invalidated"},
+            ip_address=_get_client_ip(),
+        )
+        return jsonify({"error": "Session invalid — please sign in again", "code": "token_reused"}), 401
+
+    # ── Issue new token pair ──────────────────────────────────────────
+    new_tokens = generate_tokens(user_id)
+    try:
+        models.store_refresh_token_hash(user_id, _hash_token(new_tokens["refresh_token"]))
+    except Exception as exc:
+        logger.error("refresh: store new refresh token hash failed: %s", exc)
+
+    resp = jsonify({"access_token": new_tokens["access_token"]})
+    resp.set_cookie("access_token",  new_tokens["access_token"],
                     httponly=True, samesite="Lax", secure=True,
                     max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+    resp.set_cookie("refresh_token", new_tokens["refresh_token"],
+                    httponly=True, samesite="Lax", secure=True,
+                    max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600)
     return resp
 
 
