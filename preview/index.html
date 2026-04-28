@@ -2740,7 +2740,7 @@ function _showVerifyLink(url) {
 // ── Email Verification Wall ────────────────────────────────────────
 // Called instead of nav('dashboard') when a logged-in user hasn't
 // verified their email. Shows a full-page wall with resend + sign-out.
-function _showVerifyWall(userData) {
+function _showVerifyWall(userData, emailAlreadySent = false) {
   _emailVerified = false;
 
   // Hide Dashboard / Account & Billing tabs — user has no access yet
@@ -2763,12 +2763,18 @@ function _showVerifyWall(userData) {
 
   nav('verify');
 
-  // Auto-request a verify URL (handles SMTP-not-configured case)
-  _api('POST', '/auth/resend-verification').then(rv => {
-    if (rv.ok && rv.data?.verify_url) {
-      _showVerifyWallLink(rv.data.verify_url);
-    }
-  });
+  // Only auto-request a new verify URL when no email was already sent (e.g.
+  // SMTP-not-configured dev mode, or login/session-restore paths).
+  // After fresh registration the /auth/register endpoint already sent the email —
+  // calling resend-verification here would generate a NEW token, invalidate the
+  // first link, and deliver a second confusing email.
+  if (!emailAlreadySent) {
+    _api('POST', '/auth/resend-verification').then(rv => {
+      if (rv.ok && rv.data?.verify_url) {
+        _showVerifyWallLink(rv.data.verify_url);
+      }
+    });
+  }
 }
 
 async function _resendVerificationWall() {
@@ -3138,11 +3144,13 @@ async function doRegister() {
     setLoggedIn(true, me.data, me.data.subscription);
     _applyPlanGating(me.data.subscription, me.data.features);
 
-    // New accounts are never verified yet — show the wall immediately
-    _showVerifyWall(me.data);
+    // New accounts are never verified yet — show the wall immediately.
+    // Pass emailAlreadySent=true so _showVerifyWall does NOT auto-call
+    // /auth/resend-verification (which would generate a new token and
+    // send a second email, invalidating the one just sent by /auth/register).
+    _showVerifyWall(me.data, true);
 
-    // If SMTP is not configured the server returns the verify URL directly —
-    // _showVerifyWall already auto-requests it, but honour the register response too
+    // If SMTP is not configured the server returns the verify URL directly
     if (data.verify_url) {
       setTimeout(() => _showVerifyWallLink(data.verify_url), 600);
     }
