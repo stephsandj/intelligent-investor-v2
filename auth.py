@@ -804,6 +804,13 @@ def register():
         password_hash = hash_password(password)
         user = models.create_user(email, password_hash, full_name)
     except Exception as exc:
+        # Catch UNIQUE constraint violation from the DB (race condition: two requests
+        # passed the get_user_by_email check before either committed the new row).
+        # Treat it the same as the explicit 409 check above — no email is sent.
+        exc_str = str(exc).lower()
+        if "unique" in exc_str or "duplicate" in exc_str:
+            logger.warning("register: duplicate email race condition for %s", email)
+            return jsonify({"error": "An account with that email already exists"}), 409
         logger.error("register: create_user failed: %s", exc)
         return jsonify({"error": "Failed to create account"}), 500
 

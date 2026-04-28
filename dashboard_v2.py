@@ -1269,7 +1269,7 @@ LOGIN_HTML = """<!DOCTYPE html>
     <label>Password <span style="color:#8b949e;font-size:.75rem">(min 8 chars)</span></label>
     <input type="password" id="r-pwd" placeholder="••••••••" autocomplete="new-password">
     <div class="err" id="r-err"></div>
-    <button class="btn" onclick="doRegister()">Start Free Trial</button>
+    <button class="btn" id="r-btn" onclick="doRegister()">Start Free Trial</button>
   </div>
   <div class="footer-link">Need help? <a href="mailto:support@intelligentinvestor.io">Contact support</a></div>
 </div>
@@ -1295,7 +1295,12 @@ async function doLogin(){
   }catch(ex){errEl.textContent='Network error. Try again.';errEl.style.display='block';}
 }
 
+let _isRegistering = false;
 async function doRegister(){
+  if(_isRegistering) return;          // block duplicate clicks / held Enter
+  _isRegistering = true;
+  const btn=document.getElementById('r-btn');
+  if(btn){ btn.disabled=true; btn.textContent='Creating account…'; }
   const name=document.getElementById('r-name').value;
   const e=document.getElementById('r-email').value;
   const p=document.getElementById('r-pwd').value;
@@ -1306,11 +1311,19 @@ async function doRegister(){
     const d=await r.json();
     if(!r.ok){
       const msg=d.fields?Object.values(d.fields).join(' · '):d.error||'Registration failed';
-      errEl.textContent=msg;errEl.style.display='block';return;
+      errEl.textContent=msg;errEl.style.display='block';
+      // Re-enable button so user can correct and retry
+      if(btn){ btn.disabled=false; btn.textContent='Start Free Trial'; }
+      _isRegistering=false;
+      return;
     }
     // Tokens are set as HttpOnly cookies by the server — just redirect
     window.location.href='/';
-  }catch(ex){errEl.textContent='Network error. Try again.';errEl.style.display='block';}
+  }catch(ex){
+    errEl.textContent='Network error. Try again.';errEl.style.display='block';
+    if(btn){ btn.disabled=false; btn.textContent='Start Free Trial'; }
+    _isRegistering=false;
+  }
 }
 
 // Auto-submit on Enter
