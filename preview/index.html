@@ -2740,7 +2740,7 @@ function _showVerifyLink(url) {
 // ── Email Verification Wall ────────────────────────────────────────
 // Called instead of nav('dashboard') when a logged-in user hasn't
 // verified their email. Shows a full-page wall with resend + sign-out.
-function _showVerifyWall(userData, emailAlreadySent = false) {
+function _showVerifyWall(userData) {
   _emailVerified = false;
 
   // Hide Dashboard / Account & Billing tabs — user has no access yet
@@ -2762,19 +2762,11 @@ function _showVerifyWall(userData, emailAlreadySent = false) {
   if (linkWrap) linkWrap.style.display = 'none';
 
   nav('verify');
-
-  // Only auto-request a new verify URL when no email was already sent (e.g.
-  // SMTP-not-configured dev mode, or login/session-restore paths).
-  // After fresh registration the /auth/register endpoint already sent the email —
-  // calling resend-verification here would generate a NEW token, invalidate the
-  // first link, and deliver a second confusing email.
-  if (!emailAlreadySent) {
-    _api('POST', '/auth/resend-verification').then(rv => {
-      if (rv.ok && rv.data?.verify_url) {
-        _showVerifyWallLink(rv.data.verify_url);
-      }
-    });
-  }
+  // No auto-resend here. Calling /auth/resend-verification from this function
+  // fires on EVERY page load / session restore for any unverified user, which
+  // generates a new token each time (invalidating the previous link) and sends
+  // duplicate emails. The user has a "Resend Verification Email" button on the
+  // wall. Registration passes verify_url in the response for SMTP-off dev mode.
 }
 
 async function _resendVerificationWall() {
@@ -3145,10 +3137,7 @@ async function doRegister() {
     _applyPlanGating(me.data.subscription, me.data.features);
 
     // New accounts are never verified yet — show the wall immediately.
-    // Pass emailAlreadySent=true so _showVerifyWall does NOT auto-call
-    // /auth/resend-verification (which would generate a new token and
-    // send a second email, invalidating the one just sent by /auth/register).
-    _showVerifyWall(me.data, true);
+    _showVerifyWall(me.data);
 
     // If SMTP is not configured the server returns the verify URL directly
     if (data.verify_url) {
