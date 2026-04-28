@@ -1,21 +1,18 @@
 {
-  "email_enabled": false,
+  "email_enabled": true,
   "pdf_enabled": true,
-  "markets": [
-    "AMEX"
-  ],
+  "markets": [],
   "loser_period": "daily100",
-  "stock_geography": "usa",
-  "schedule_hour": 1,
-  "schedule_minute": 15,
+  "stock_geography": "international",
+  "schedule_hour": 23,
+  "schedule_minute": 35,
   "schedule_days": [
     0,
     1,
     2,
     3,
-    4,
-    5
+    4
   ],
   "enabled": true,
-  "email_address": "sandjstephane@yahoo.fr"
+  "email_address": "stephane.sandjong@gmail.com"
 }

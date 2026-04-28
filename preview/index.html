@@ -2558,7 +2558,7 @@ async function _restoreSession() {
       window._stripePaymentSuccess = false;
       nav('dashboard');
       sidebarNav('stocks');
-      setTimeout(() => showToast('🎉 Payment successful — your plan is now active!', 'success'), 500);
+      setTimeout(() => showToast('Payment successful — your plan is now active!', 'success'), 500);
       return;
     }
 
@@ -3119,7 +3119,7 @@ async function doRegister() {
       Object.entries(data.fields).forEach(([field, msg]) => {
         const id = field === 'email' ? 'r-email' : field === 'password' ? 'r-pwd' : field === 'full_name' ? 'r-name' : null;
         if (id) _setRegFieldError(id, `✗ ${msg}`);
-        else showToast(`✗ ${msg}`, 'error');
+        else showToast(`${msg}`, 'error');
       });
     } else {
       showToast(data.error || 'Registration failed. Please try again.', 'error');
@@ -3143,11 +3143,11 @@ async function doRegister() {
     if (data.verify_url) {
       setTimeout(() => _showVerifyWallLink(data.verify_url), 600);
     }
-    showToast('🎉 Account created! Check your inbox to verify your email.', 'success');
+    showToast('Account created! Check your inbox to verify your email.', 'success');
   } else {
     setLoggedIn(true, { user_id: data.user_id, email: data.email }, null);
     nav('dashboard');
-    showToast('🎉 Account created! Check your email to verify your address.', 'success');
+    showToast('Account created! Check your email to verify your address.', 'success');
   }
 }
 
@@ -3169,7 +3169,7 @@ async function doForgotPassword() {
     return;
   }
 
-  showToast('✓ Reset link sent to your email. Check your inbox!', 'success');
+  showToast('Reset link sent to your email. Check your inbox!', 'success');
   document.getElementById('forgot-email').value = '';
 
   // After 3 seconds, switch back to signin
@@ -3206,7 +3206,7 @@ async function doResetPassword() {
     return;
   }
 
-  showToast('✓ Password updated successfully! You can now sign in.', 'success');
+  showToast('Password updated successfully! You can now sign in.', 'success');
   document.getElementById('reset-pwd1').value = '';
   document.getElementById('reset-pwd2').value = '';
 
@@ -4247,47 +4247,12 @@ function generateAnalysisHTML(pick, accent) {
     </div>
   `;
 
-    const grahamCriteria = pick.checklist || [];
-    const buffettCriteria = pick.buffett_checklist || [];
-  
-    if (grahamCriteria.length > 0) {
-      html += `
-      <div class="analysis-section">
-        <div class="analysis-section-title">GRAHAM ${grahamCriteria.length}-CRITERIA</div>
-        <div class="analysis-checklist">
-          ${grahamCriteria.map(c => `
-            <div class="analysis-checklist-row">
-              <div class="analysis-checklist-criterion">${c.criterion || c.label || ''}</div>
-              <div class="analysis-checklist-detail">${c.detail || c.desc || ''}</div>
-              <div class="analysis-checklist-result ${(c.status || '').toLowerCase()}">
-                ${c.status || '—'}
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-      `;
-    }
-  
-    if (buffettCriteria.length > 0) {
-      html += `
-      <div class="analysis-section">
-        <div class="analysis-section-title">BUFFETT ${buffettCriteria.length}-CRITERIA</div>
-        <div class="analysis-checklist">
-          ${buffettCriteria.map(c => `
-            <div class="analysis-checklist-row">
-              <div class="analysis-checklist-criterion">${c.criterion || c.label || ''}</div>
-              <div class="analysis-checklist-detail">${c.detail || c.desc || ''}</div>
-              <div class="analysis-checklist-result ${(c.status || '').toLowerCase()}">
-                ${c.status || '—'}
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-      `;
-    }
-  
+    // Detailed Graham N-criteria and Buffett N-criteria checklist sections
+    // were intentionally removed from the Stock screen detail view per product
+    // direction — the 13-criterion scoring still drives the picks, and the
+    // aggregate Graham / Buffett scores are surfaced in the Scores Breakdown
+    // section below, but the per-row criterion list is no longer displayed.
+
   // Scores Breakdown Section
   html += `
     <div style="background: linear-gradient(135deg, var(--surface2) 0%, var(--surface) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 32px; margin-top: 28px;">

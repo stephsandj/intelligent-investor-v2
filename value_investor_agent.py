@@ -2828,15 +2828,27 @@ def main():
     if pdf_enabled:
         print("\nStep 4: Generating Intelligent Investor PDF report...")
         gen      = IntelligentInvestorPDFGenerator()
-        # Use datetime.now() for filename to ensure accurate PDF creation timestamp
-        # Format: "intelligent_investor_20260424_155600.pdf" with seconds precision
-        # to prevent duplicate filenames. Using YYYYMMDD_HHMMSS format ensures:
-        # 1. No spaces or special characters (URL-safe)
-        # 2. Chronological sort order by filename
-        # 3. Seconds precision prevents duplicates from rapid consecutive runs
+        # Capture the timestamp at PDF creation time (not at run start) so the
+        # filename reflects when the report was actually written to disk.
+        # Format: "intelligent_investor_20260424_155600_123.pdf" — YYYYMMDD_HHMMSS
+        # plus 3-digit milliseconds to guarantee uniqueness even when two runs
+        # complete within the same second (multi-user, rapid retries, etc.).
+        # The PDF body still uses `run_date` for the displayed report date so
+        # the user sees the date the screener actually ran against market data.
         now = datetime.now(_TZ_EST)
-        timestamp = now.strftime('%Y%m%d_%H%M%S')
+        timestamp = now.strftime('%Y%m%d_%H%M%S') + f"_{now.microsecond // 1000:03d}"
         filename = f"intelligent_investor_{timestamp}.pdf"
+        # Defensive guard: if a file with this name somehow exists already,
+        # append an incrementing suffix rather than silently overwriting.
+        _out_dir_check = (os.environ.get("AGENT_REPORTS_DIR")
+                          or os.environ.get("AGENT_OUTPUT_DIR")
+                          or os.path.dirname(os.path.abspath(__file__)))
+        _candidate = os.path.join(_out_dir_check, filename)
+        _suffix = 1
+        while os.path.exists(_candidate):
+            filename = f"intelligent_investor_{timestamp}_{_suffix}.pdf"
+            _candidate = os.path.join(_out_dir_check, filename)
+            _suffix += 1
         filepath = gen.generate_report(top5, filename, run_date)
     else:
         print("\nStep 4: PDF generation skipped (disabled in Agent Configuration)")
