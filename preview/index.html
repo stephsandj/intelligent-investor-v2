@@ -6705,8 +6705,10 @@ async function saveSchedule() {
     return;
   }
 
-  const hour = parseInt(hourEl.value) || parseInt(hourEl.placeholder || 18);
-  const min = parseInt(minEl.value) || parseInt(minEl.placeholder || 0);
+  // Use explicit empty-string check instead of || so that hour=0 (midnight)
+  // is never treated as falsy and silently replaced by the default of 18.
+  const hour = hourEl.value !== '' ? parseInt(hourEl.value, 10) : parseInt(hourEl.placeholder || 18, 10);
+  const min  = minEl.value  !== '' ? parseInt(minEl.value,  10) : parseInt(minEl.placeholder  || 0,  10);
   const enabled = toggleBtn?.classList.contains('on') ?? true;
 
   if (isNaN(hour) || hour < 0 || hour > 23) { showToast('Enter a valid hour (0–23)', 'error'); return; }
