@@ -3618,7 +3618,8 @@ async function _loadDashboard() {
   _applyStockPlanGating(pi.features || _currentFeats);
 
   // Final lock — runs after loadConfig AND _applyStockPlanGating, so neither can undo it
-  if (_isRunning || localStorage.getItem('ii_run_in_progress') === 'true') {
+  // Lock for both manual runs (_isRunning) AND scheduled runs (_scheduledRunActive)
+  if (_isRunning || _scheduledRunActive || localStorage.getItem('ii_run_in_progress') === 'true') {
     _lockAgentConfig();
   }
 
@@ -4579,7 +4580,8 @@ async function loadConfig() {
     _updateCfgGeoSel(geo);
 
     // Only attach change listeners when NOT running (to prevent changes mid-run)
-    if (!_isRunning) {
+    // Block listeners for both manual runs (_isRunning) AND scheduled runs (_scheduledRunActive)
+    if (!_isRunning && !_scheduledRunActive) {
       if (emailEl) emailEl.onchange = saveConfig;
       if (pdfEl)   pdfEl.onchange   = updateEmailReportDependency;
       document.querySelectorAll('input[name="cfg-period"]').forEach(el => {
@@ -4590,8 +4592,8 @@ async function loadConfig() {
       });
     }
 
-    // Re-lock everything if a run is in progress (check both flag and localStorage for robustness)
-    if (_isRunning || localStorage.getItem('ii_run_in_progress') === 'true') _lockAgentConfig();
+    // Re-lock everything if a run is in progress (manual or scheduled)
+    if (_isRunning || _scheduledRunActive || localStorage.getItem('ii_run_in_progress') === 'true') _lockAgentConfig();
   } catch(e) { console.error('loadConfig error', e); }
 }
 
