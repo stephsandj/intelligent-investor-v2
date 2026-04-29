@@ -1527,10 +1527,10 @@ async function loadMonitoring() {
   var pkRam   = document.getElementById('mon-peak-ram');
   var pkConn  = document.getElementById('mon-peak-conn');
   var pkUsers = document.getElementById('mon-peak-users');
-  if (pkCpu)   pkCpu.textContent   = 'Peak ' + peakCpu.toFixed(1)   + '%';
-  if (pkRam)   pkRam.textContent   = 'Peak ' + peakRam.toFixed(1)   + '%';
-  if (pkConn)  pkConn.textContent  = 'Peak ' + Math.round(peakConn);
-  if (pkUsers) pkUsers.textContent = 'Peak ' + Math.round(peakUsers);
+  if (pkCpu)   pkCpu.textContent   = 'Peak: ' + peakCpu.toFixed(1)   + '%';
+  if (pkRam)   pkRam.textContent   = 'Peak: ' + peakRam.toFixed(1)   + '%';
+  if (pkConn)  pkConn.textContent  = 'Peak: ' + Math.round(peakConn);
+  if (pkUsers) pkUsers.textContent = 'Peak: ' + Math.round(peakUsers);
 
   // ── Build chart labels — pre-formatted strings (no adapter needed) ────
   var labels = series.map(function(p) {
