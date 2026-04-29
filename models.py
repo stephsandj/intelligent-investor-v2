@@ -1441,14 +1441,14 @@ def insert_metric_sample(
 
 
 def count_active_users_today() -> int:
-    """Count distinct users who have used at least one run today (EST/EDT date)."""
+    """Count distinct users who have used at least one screener run today (EST/EDT date)."""
     with db_cursor(commit=False) as cur:
         cur.execute(
             """
             SELECT COUNT(*) AS cnt
-            FROM daily_runs
-            WHERE date = (NOW() AT TIME ZONE 'America/New_York')::date
-              AND run_count > 0
+            FROM daily_run_counts
+            WHERE run_date = (NOW() AT TIME ZONE 'America/New_York')::date
+              AND count > 0
             """
         )
         row = cur.fetchone()
