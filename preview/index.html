@@ -647,7 +647,8 @@
       </div>
       <div class="form-group">
         <label>Email address</label>
-        <input type="email" id="r-email" placeholder="">
+        <input type="email" id="r-email" placeholder="" oninput="document.getElementById('r-email-error').style.display='none'">
+        <div id="r-email-error" style="color:var(--red);font-size:.78rem;margin-top:6px;display:none;"></div>
       </div>
       <div class="form-group">
         <label>Password <small style="color:var(--muted)">(min 12 chars)</small></label>
@@ -2932,6 +2933,21 @@ async function doRegister() {
   const disclaimerError = document.getElementById('r-disclaimer-error');
 
   if (!name || !email || !pwd) { showToast('Please fill in all fields', 'error'); return; }
+
+  // Email format validation — must match user@domain.tld
+  const _emailRe = /^[a-zA-Z0-9._%+\-]{1,64}@[a-zA-Z0-9.\-]{1,253}\.[a-zA-Z]{2,}$/;
+  const emailErrEl = document.getElementById('r-email-error');
+  if (!_emailRe.test(email)) {
+    if (emailErrEl) {
+      emailErrEl.textContent = '✗ Please enter a valid email address (e.g. name@example.com)';
+      emailErrEl.style.display = 'block';
+    }
+    document.getElementById('r-email').focus();
+    showToast('Please enter a valid email address', 'error');
+    return;
+  }
+  if (emailErrEl) emailErrEl.style.display = 'none';
+
   if (pwd.length < 12)          { showToast('Password must be at least 12 characters', 'error'); return; }
 
   // Check if disclaimer is checked
