@@ -433,6 +433,7 @@ def _get_run_state(user_id: "str | None" = None) -> dict:
                             "started_at":        pid_data.get("started_at"),
                             "finished_at":       None,
                             "exit_code":         None,
+                            "source":            pid_data.get("source", "manual"),
                             "run_summary":       state.get("run_summary", {}),
                             "last_completed_at": state.get("last_completed_at"),
                         }
@@ -531,7 +532,7 @@ def _start_agent(user_id: "str | None" = None, source: str = "manual"):
         # Write PID file so ALL Gunicorn workers can detect this run is active
         try:
             with open(os.path.join(out_dir, "agent_running.json"), "w") as _pf:
-                json.dump({"pid": proc.pid, "started_at": _user_run_states[user_id]["started_at"]}, _pf)
+                json.dump({"pid": proc.pid, "started_at": _user_run_states[user_id]["started_at"], "source": source}, _pf)
         except Exception as _pf_err:
             logger.warning("Could not write agent PID file: %s", _pf_err)
         logger.info("Stock screen started for user %s (pid=%d, source=%s)",
