@@ -3358,31 +3358,51 @@ async function _loadDashboard() {
   refreshTickerStatus(true);
 }
 
-// ── Scheduled run monitor — automatically refresh page when scheduled run starts ──
+// ── Scheduled run monitor — automatically refresh UI when scheduled run starts/ends ──
 function _startScheduledRunMonitor() {
   if (_scheduledRunMonitorInterval) clearInterval(_scheduledRunMonitorInterval);
+  let _monBusy = false;  // prevent overlapping async callbacks
 
   _scheduledRunMonitorInterval = setInterval(async () => {
+    if (!_loggedIn || _monBusy) return;
+    _monBusy = true;
     try {
       const { ok, data } = await _api('GET', '/api/status');
-      if (!ok || !data.run_state) return;
+      if (!ok || !data.run_state) { _monBusy = false; return; }
 
-      const currentState = !!data.run_state.running && data.run_state.source === 'scheduled';
+      const backendRunning   = !!data.run_state.running;
+      const backendScheduled = backendRunning && data.run_state.source === 'scheduled';
 
-      // Detect transition: scheduled run just started
-      if (currentState && !_prevScheduledRunActive) {
-        console.log('[Scheduled Run Monitor] Scheduled run started — refreshing page...');
-        // Give it a brief moment to settle, then refresh
-        setTimeout(() => {
-          location.reload();
-        }, 500);
+      // ── Scheduled run just STARTED ───────────────────────────
+      // Detect transition: backend now shows scheduled running, UI was idle
+      if (backendScheduled && !_prevScheduledRunActive) {
+        _scheduledRunActive = true;
+        _isRunning = false;
+        _updateRunUI();
+        // Navigate to Stocks Screener so user sees it live
+        nav('dashboard');
+        sidebarNav('stocks');
+        await _loadDashboard();
+        showToast('Scheduled screen is now running…', 'info');
       }
 
-      _prevScheduledRunActive = currentState;
-    } catch (e) {
-      console.log('[Scheduled Run Monitor] Error checking status:', e.message);
-    }
-  }, 30000);  // Check every 30 seconds
+      // ── Scheduled run just COMPLETED ─────────────────────────
+      // Use _scheduledRunActive (live UI flag) as the source of truth — this
+      // catches completion even if the page was loaded mid-run (where
+      // _prevScheduledRunActive was never set true in this session).
+      if (!backendRunning && _scheduledRunActive) {
+        _isRunning = false;
+        _scheduledRunActive = false;
+        _updateRunUI();           // immediately shows "Idle" + re-enables Run button
+        await _loadDashboard();   // load fresh picks and updated stats
+        await _refreshRunCount();
+        showToast('Scheduled screen complete — new picks are ready!', 'success');
+      }
+
+      _prevScheduledRunActive = backendScheduled;
+    } catch (_e) { /* silently ignore — non-critical background poll */ }
+    _monBusy = false;
+  }, 10000);  // Poll every 10 seconds
 }
 
 function _stopScheduledRunMonitor() {
