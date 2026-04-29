@@ -4262,11 +4262,43 @@ function generateAnalysisHTML(pick, accent) {
     </div>
   `;
 
-    // Detailed Graham N-criteria and Buffett N-criteria checklist sections
-    // were intentionally removed from the Stock screen detail view per product
-    // direction — the 13-criterion scoring still drives the picks, and the
-    // aggregate Graham / Buffett scores are surfaced in the Scores Breakdown
-    // section below, but the per-row criterion list is no longer displayed.
+  // ── Graham Criteria Section ──────────────────────────────────────────────
+  const grahamCriteria = pick.checklist || [];
+  if (grahamCriteria.length > 0) {
+    const gRows = grahamCriteria.map(c => {
+      const st     = (c.status || '').toUpperCase();
+      const isPass = st === 'PASS', isCond = st === 'COND';
+      const rowBg  = isPass ? 'rgba(63,185,80,0.06)'  : isCond ? 'rgba(227,179,65,0.06)'  : 'rgba(248,81,73,0.06)';
+      const rowBdr = isPass ? 'rgba(63,185,80,0.22)'  : isCond ? 'rgba(227,179,65,0.22)'  : 'rgba(248,81,73,0.22)';
+      const lblBg  = isPass ? 'rgba(63,185,80,0.18)'  : isCond ? 'rgba(227,179,65,0.18)'  : 'rgba(248,81,73,0.18)';
+      const lblFg  = isPass ? 'var(--green)'           : isCond ? 'var(--yellow)'           : 'var(--red)';
+      const icon   = isPass ? '\u2713' : isCond ? '~' : '\u2717';
+      return `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:10px 14px;background:${rowBg};border:1px solid ${rowBdr};border-radius:8px;"><div style="min-width:0;flex:1;"><div style="font-size:0.78rem;font-weight:600;color:var(--text);line-height:1.35;">${c.criterion || ''}</div><div style="font-size:0.71rem;color:var(--muted);margin-top:3px;line-height:1.4;">${c.detail || ''}</div></div><span style="flex-shrink:0;display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:5px;font-size:0.68rem;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;background:${lblBg};color:${lblFg};">${icon} ${st === 'COND' ? 'COND' : st}</span></div>`;
+    }).join('');
+    const gPass = grahamCriteria.filter(c => (c.status||'').toUpperCase() === 'PASS').length;
+    const gCond = grahamCriteria.filter(c => (c.status||'').toUpperCase() === 'COND').length;
+    const gFail = grahamCriteria.filter(c => (c.status||'').toUpperCase() === 'FAIL').length;
+    html += `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:24px 28px;margin-top:24px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;"><div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);">Graham Criteria</div><div style="font-size:0.72rem;color:var(--muted);"><span style="color:var(--green);font-weight:700;">${gPass} PASS</span><span style="margin:0 6px;opacity:0.4;">&middot;</span><span style="color:var(--yellow);font-weight:700;">${gCond} COND</span><span style="margin:0 6px;opacity:0.4;">&middot;</span><span style="color:var(--red);font-weight:700;">${gFail} FAIL</span></div></div><div style="display:flex;flex-direction:column;gap:7px;">${gRows}</div></div>`;
+  }
+
+  // ── Buffett Criteria Section ───────────────────────────────────────────────
+  const buffettCriteria = pick.buffett_checklist || [];
+  if (buffettCriteria.length > 0) {
+    const bRows = buffettCriteria.map(c => {
+      const st     = (c.status || '').toUpperCase();
+      const isPass = st === 'PASS', isCond = st === 'COND';
+      const rowBg  = isPass ? 'rgba(63,185,80,0.06)'  : isCond ? 'rgba(227,179,65,0.06)'  : 'rgba(248,81,73,0.06)';
+      const rowBdr = isPass ? 'rgba(63,185,80,0.22)'  : isCond ? 'rgba(227,179,65,0.22)'  : 'rgba(248,81,73,0.22)';
+      const lblBg  = isPass ? 'rgba(63,185,80,0.18)'  : isCond ? 'rgba(227,179,65,0.18)'  : 'rgba(248,81,73,0.18)';
+      const lblFg  = isPass ? 'var(--green)'           : isCond ? 'var(--yellow)'           : 'var(--red)';
+      const icon   = isPass ? '\u2713' : isCond ? '~' : '\u2717';
+      return `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:10px 14px;background:${rowBg};border:1px solid ${rowBdr};border-radius:8px;"><div style="min-width:0;flex:1;"><div style="font-size:0.78rem;font-weight:600;color:var(--text);line-height:1.35;">${c.criterion || ''}</div><div style="font-size:0.71rem;color:var(--muted);margin-top:3px;line-height:1.4;">${c.detail || ''}</div></div><span style="flex-shrink:0;display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:5px;font-size:0.68rem;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;background:${lblBg};color:${lblFg};">${icon} ${st === 'COND' ? 'COND' : st}</span></div>`;
+    }).join('');
+    const bPass = buffettCriteria.filter(c => (c.status||'').toUpperCase() === 'PASS').length;
+    const bCond = buffettCriteria.filter(c => (c.status||'').toUpperCase() === 'COND').length;
+    const bFail = buffettCriteria.filter(c => (c.status||'').toUpperCase() === 'FAIL').length;
+    html += `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:24px 28px;margin-top:12px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;"><div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);">Buffett Criteria</div><div style="font-size:0.72rem;color:var(--muted);"><span style="color:var(--green);font-weight:700;">${bPass} PASS</span><span style="margin:0 6px;opacity:0.4;">&middot;</span><span style="color:var(--yellow);font-weight:700;">${bCond} COND</span><span style="margin:0 6px;opacity:0.4;">&middot;</span><span style="color:var(--red);font-weight:700;">${bFail} FAIL</span></div></div><div style="display:flex;flex-direction:column;gap:7px;">${bRows}</div></div>`;
+  }
 
   // Scores Breakdown Section
   html += `
