@@ -1851,8 +1851,8 @@
             <div class="section-title" style="margin-top:18px">Session Security</div>
             <div class="card" style="padding:16px 18px">
               <div style="font-size:.78rem;color:var(--muted);line-height:1.9">
-                <div>• Auto sign-out after <strong style="color:var(--text)">5 minutes</strong> of inactivity</div>
-                <div>• Session tokens expire after <strong style="color:var(--text)">15 minutes</strong> of last activity</div>
+                <div>• Auto sign-out after <strong style="color:var(--text)">15 minutes</strong> of inactivity</div>
+                <div>• Session tokens expire after <strong style="color:var(--text)">115 minutes</strong> of last activity</div>
                 <div>• All sessions are encrypted and logged</div>
               </div>
             </div>
@@ -2313,8 +2313,18 @@ function nav(id) {
   // page, not a screen-section. Writing it causes a blank dashboard on next login
   // because sidebarNav('account') has no matching _showScreenSection branch.
 
-  // Lazy-load data when navigating to dashboard
-  if (id === 'dashboard') _loadDashboard();
+  // Lazy-load data when navigating to dashboard.
+  // Also ensure at least one screen section is active — if none is (e.g. user
+  // navigated to Account & Billing first and sidebarNav was never called),
+  // activate the saved section so the content area is never blank.
+  if (id === 'dashboard') {
+    const anyActive = document.querySelector('#page-dashboard .screen-section.active');
+    if (!anyActive) {
+      const sec = _safeSection(localStorage.getItem('ii_sidebar_section') || 'stocks');
+      _showScreenSection(sec);
+    }
+    _loadDashboard();
+  }
   if (id === 'account')   _refreshAccountPage();
 }
 
@@ -2395,7 +2405,15 @@ async function _restoreSession() {
 
   // Handle email verification redirect params
   const params = new URLSearchParams(window.location.search);
-  if (params.get('payment_success') === '1') {
+  if (params.get('portal_return') === '1') {
+    // Stripe Billing Portal redirect back. The browser may have restored a
+    // bfcache snapshot of the previous session instead of re-running JS,
+    // which leaves the content area blank. Strip the param and do ONE hard
+    // reload so the page initialises cleanly from scratch.
+    history.replaceState({}, '', '/');
+    window.location.reload();
+    return;
+  } else if (params.get('payment_success') === '1') {
     // Store flag in sessionStorage, clear URL, then do ONE clean reload.
     // This eliminates the blank-page flash: the reloaded page starts fresh
     // (no Stripe URL param) and picks up the flag from sessionStorage below.
@@ -2451,7 +2469,7 @@ async function _restoreSession() {
       window._stripePaymentSuccess = false;
       nav('dashboard');
       sidebarNav('stocks');
-      setTimeout(() => showToast('🎉 Payment successful — your plan is now active!', 'success'), 500);
+      setTimeout(() => showToast('Payment successful — your plan is now active!', 'success'), 500);
       return;
     }
 
@@ -2467,6 +2485,11 @@ async function _restoreSession() {
     const savedView    = localStorage.getItem('ii_active_view') || 'dashboard';
     const savedSection = _safeSection(localStorage.getItem('ii_sidebar_section') || 'stocks');
     if (savedView === 'account') {
+      // Prime the active screen section so that the Dashboard page is fully
+      // rendered when the user clicks the Dashboard tab after viewing billing.
+      // We call _showScreenSection directly (not sidebarNav) to avoid
+      // overwriting the 'account' value in localStorage.
+      _showScreenSection(savedSection);
       nav('account');
     } else {
       nav(savedView);
@@ -3061,8 +3084,19 @@ async function doRegister() {
   if (btn) { btn.disabled = false; btn.textContent = 'Start Free Trial →'; }
 
   if (!ok) {
-    const msg = data.error || (status === 409 ? 'An account with that email already exists.' : 'Registration failed. Please try again.');
-    showToast(msg, 'error');
+    if (status === 409) {
+      // Email already in use — show inline on the email field
+      _setRegFieldError('r-email', '✗ An account with this email already exists. Try signing in instead.');
+    } else if (data.fields) {
+      // Server returned per-field validation errors
+      Object.entries(data.fields).forEach(([field, msg]) => {
+        const id = field === 'email' ? 'r-email' : field === 'password' ? 'r-pwd' : field === 'full_name' ? 'r-name' : null;
+        if (id) _setRegFieldError(id, `✗ ${msg}`);
+        else showToast(`${msg}`, 'error');
+      });
+    } else {
+      showToast(data.error || 'Registration failed. Please try again.', 'error');
+    }
     return;
   }
 
@@ -3083,11 +3117,11 @@ async function doRegister() {
     if (data.verify_url) {
       setTimeout(() => _showVerifyWallLink(data.verify_url), 600);
     }
-    showToast('🎉 Account created! Check your inbox to verify your email.', 'success');
+    showToast('Account created! Check your inbox to verify your email.', 'success');
   } else {
     setLoggedIn(true, { user_id: data.user_id, email: data.email }, null);
     nav('dashboard');
-    showToast('🎉 Account created! Check your email to verify your address.', 'success');
+    showToast('Account created! Check your email to verify your address.', 'success');
   }
 }
 
@@ -3109,7 +3143,7 @@ async function doForgotPassword() {
     return;
   }
 
-  showToast('✓ Reset link sent to your email. Check your inbox!', 'success');
+  showToast('Reset link sent to your email. Check your inbox!', 'success');
   document.getElementById('forgot-email').value = '';
 
   // After 3 seconds, switch back to signin
@@ -3146,7 +3180,7 @@ async function doResetPassword() {
     return;
   }
 
-  showToast('✓ Password updated successfully! You can now sign in.', 'success');
+  showToast('Password updated successfully! You can now sign in.', 'success');
   document.getElementById('reset-pwd1').value = '';
   document.getElementById('reset-pwd2').value = '';
 
@@ -3207,16 +3241,31 @@ async function _proceedWithLogout() {
   _api('POST', '/auth/logout').catch(() => {});
 }
 
-// ── SESSION INACTIVITY TIMEOUT (5 minutes) ────────────────────────
-const SESSION_INACTIVITY_MS = 5 * 60 * 1000; // 5 minutes
-let _inactivityTimer = null;
-let _lastActivityTime = Date.now();
+// ── SESSION INACTIVITY TIMEOUT (115 minutes) ───────────────────────
+// 15 min matches trading-platform standards (Schwab, Fidelity, IBKR).
+// A 1-minute warning toast gives the user a chance to stay signed in.
+const SESSION_INACTIVITY_MS   = 15 * 60 * 1000; // 115 minutes
+const SESSION_INACTIVITY_WARN =  14 * 60 * 1000; // warn at 14 minutes
+let _inactivityTimer     = null;
+let _inactivityWarnTimer = null;
+let _lastActivityTime    = Date.now();
 
 function _resetInactivityTimer() {
   if (!_currentUser) return; // Only track if logged in
   _lastActivityTime = Date.now();
 
-  if (_inactivityTimer) clearTimeout(_inactivityTimer);
+  if (_inactivityTimer)     clearTimeout(_inactivityTimer);
+  if (_inactivityWarnTimer) clearTimeout(_inactivityWarnTimer);
+
+  // 1-minute warning before logout
+  _inactivityWarnTimer = setTimeout(() => {
+    if (!_currentUser) return;
+    const anyRunActive = _isRunning === true || _etf_state?.running === true || _bond_state?.running === true;
+    if (!anyRunActive) {
+      showToast('Session expires in 1 minute due to inactivity — move your mouse to stay signed in.', 'warning');
+    }
+  }, SESSION_INACTIVITY_WARN);
+
   _inactivityTimer = setTimeout(() => {
     if (_currentUser) {
       // Check if any screenings are active — don't logout during a run
@@ -3227,7 +3276,7 @@ function _resetInactivityTimer() {
         return;
       }
       // No active runs — proceed with inactivity logout
-      showToast('⏱️ Session expired due to inactivity. Please sign in again.', 'warning');
+      showToast('Session expired due to inactivity. Please sign in again.', 'warning');
       _forceLogout();
     }
   }, SESSION_INACTIVITY_MS);
@@ -3254,8 +3303,10 @@ function _startActivityTracking() {
 
 // Stop tracking when user logs out
 function _stopActivityTracking() {
-  if (_inactivityTimer) clearTimeout(_inactivityTimer);
-  _inactivityTimer = null;
+  if (_inactivityTimer)     clearTimeout(_inactivityTimer);
+  if (_inactivityWarnTimer) clearTimeout(_inactivityWarnTimer);
+  _inactivityTimer     = null;
+  _inactivityWarnTimer = null;
 }
 
 // ── Admin Panel ────────────────────────────────────────────────────
@@ -4211,62 +4262,11 @@ function generateAnalysisHTML(pick, accent) {
     </div>
   `;
 
-    const grahamCriteria = pick.checklist || [];
-    const buffettCriteria = pick.buffett_checklist || [];
-
-  // ── Graham 8-Criteria Section ──────────────────────────────────────────────
-  if (grahamCriteria.length > 0) {
-    const gRows = grahamCriteria.map(c => {
-      const st = (c.status || '').toUpperCase();
-      const tagBg    = st === 'PASS' ? '#1a7f37'      : st === 'COND' ? '#9a6700'      : '#b91c1c';
-      const tagColor = '#ffffff';
-      const rowBg    = st === 'PASS' ? 'rgba(63,185,80,0.08)'   : st === 'COND' ? 'rgba(210,153,34,0.1)'   : 'rgba(248,81,73,0.08)';
-      const rowBdr   = st === 'PASS' ? 'rgba(63,185,80,0.25)'   : st === 'COND' ? 'rgba(210,153,34,0.3)'   : 'rgba(248,81,73,0.25)';
-      return `
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:${rowBg};border:1px solid ${rowBdr};border-radius:8px;">
-          <div style="min-width:0;flex:1;">
-            <div style="font-size:0.78rem;font-weight:700;color:var(--text);line-height:1.3;">${c.criterion || ''}</div>
-            <div style="font-size:0.71rem;color:var(--muted);margin-top:3px;line-height:1.4;">${c.detail || ''}</div>
-          </div>
-          <span style="flex-shrink:0;display:inline-block;padding:3px 9px;border-radius:5px;font-size:0.68rem;font-weight:800;letter-spacing:0.6px;text-transform:uppercase;background:${tagBg};color:${tagColor};">${st === 'COND' ? 'COND' : st}</span>
-        </div>`;
-    }).join('');
-    html += `
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:28px;margin-top:28px;">
-      <div style="font-size:0.75rem;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:20px;">Graham 8-Criteria</div>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        ${gRows}
-      </div>
-    </div>
-  `;
-  }
-
-  // ── Buffett 5-Criteria Section ─────────────────────────────────────────────
-  if (buffettCriteria.length > 0) {
-    const bRows = buffettCriteria.map(c => {
-      const st = (c.status || '').toUpperCase();
-      const tagBg    = st === 'PASS' ? '#1a7f37'      : st === 'COND' ? '#9a6700'      : '#b91c1c';
-      const tagColor = '#ffffff';
-      const rowBg    = st === 'PASS' ? 'rgba(63,185,80,0.08)'   : st === 'COND' ? 'rgba(210,153,34,0.1)'   : 'rgba(248,81,73,0.08)';
-      const rowBdr   = st === 'PASS' ? 'rgba(63,185,80,0.25)'   : st === 'COND' ? 'rgba(210,153,34,0.3)'   : 'rgba(248,81,73,0.25)';
-      return `
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:${rowBg};border:1px solid ${rowBdr};border-radius:8px;">
-          <div style="min-width:0;flex:1;">
-            <div style="font-size:0.78rem;font-weight:700;color:var(--text);line-height:1.3;">${c.criterion || ''}</div>
-            <div style="font-size:0.71rem;color:var(--muted);margin-top:3px;line-height:1.4;">${c.detail || ''}</div>
-          </div>
-          <span style="flex-shrink:0;display:inline-block;padding:3px 9px;border-radius:5px;font-size:0.68rem;font-weight:800;letter-spacing:0.6px;text-transform:uppercase;background:${tagBg};color:${tagColor};">${st === 'COND' ? 'COND' : st}</span>
-        </div>`;
-    }).join('');
-    html += `
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:28px;margin-top:16px;">
-      <div style="font-size:0.75rem;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:20px;">Buffett 5-Criteria</div>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        ${bRows}
-      </div>
-    </div>
-  `;
-  }
+    // Detailed Graham N-criteria and Buffett N-criteria checklist sections
+    // were intentionally removed from the Stock screen detail view per product
+    // direction — the 13-criterion scoring still drives the picks, and the
+    // aggregate Graham / Buffett scores are surfaced in the Scores Breakdown
+    // section below, but the per-row criterion list is no longer displayed.
 
   // Scores Breakdown Section
   html += `
@@ -6733,8 +6733,10 @@ async function saveSchedule() {
     return;
   }
 
-  const hour = parseInt(hourEl.value) || parseInt(hourEl.placeholder || 18);
-  const min = parseInt(minEl.value) || parseInt(minEl.placeholder || 0);
+  // Use explicit empty-string check instead of || so that hour=0 (midnight)
+  // is never treated as falsy and silently replaced by the default of 18.
+  const hour = hourEl.value !== '' ? parseInt(hourEl.value, 10) : parseInt(hourEl.placeholder || 18, 10);
+  const min  = minEl.value  !== '' ? parseInt(minEl.value,  10) : parseInt(minEl.placeholder  || 0,  10);
   const enabled = toggleBtn?.classList.contains('on') ?? true;
 
   if (isNaN(hour) || hour < 0 || hour > 23) { showToast('Enter a valid hour (0–23)', 'error'); return; }
@@ -6880,8 +6882,8 @@ async function _openSettingsModal() {
 
       <div style="padding-top:14px;border-top:1px solid var(--border);font-size:.8rem;color:var(--muted);line-height:1.6">
         <div style="margin-bottom:10px"><strong>Session Security:</strong></div>
-        <div>• Automatic sign-out after <strong>5 minutes of inactivity</strong></div>
-        <div>• Session tokens expire after <strong>15 minutes</strong> of last activity</div>
+        <div>• Automatic sign-out after <strong>15 minutes of inactivity</strong></div>
+        <div>• Session tokens expire after <strong>115 minutes</strong> of last activity</div>
         <div>• All sessions are encrypted and logged</div>
       </div>
     </div>
@@ -7063,7 +7065,7 @@ function _badgeHtml(status) {
 _restoreSession();
 
 // NOTE: No beforeunload auto-logout — page refresh would incorrectly sign users out.
-// Access tokens expire naturally after 15 minutes; the refresh token handles re-auth.
+// Access tokens expire naturally after 115 minutes; the refresh token handles re-auth.
 </script>
 </body>
 </html>

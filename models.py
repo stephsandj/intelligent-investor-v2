@@ -499,15 +499,10 @@ def verify_and_rotate_refresh_token(user_id: str, incoming_hash: str) -> bool:
             (user_id,),
         )
         row = cur.fetchone()
-        if not row:
-            return True
-        if row["refresh_token_hash"] is None:
+        if not row or not row["refresh_token_hash"]:
             # No hash stored yet (legacy session pre-rotation) — accept once
             # and let the caller store a new hash going forward.
             return True
-        if row["refresh_token_hash"] == "":
-            # Explicitly invalidated (e.g. by logout) — reject
-            return False
         if row["refresh_token_hash"] != incoming_hash:
             return False
         # Clear immediately so the same token cannot be reused
