@@ -1519,6 +1519,18 @@ def logo_png():
     return "", 204
 
 
+@app.route("/js/<path:filename>")
+def serve_js(filename):
+    """Serve bundled JS libraries from preview/js/ — avoids CDN dependencies."""
+    safe = os.path.realpath(os.path.join(_PREVIEW_DIR, "js", filename))
+    allowed = os.path.realpath(os.path.join(_PREVIEW_DIR, "js"))
+    if not safe.startswith(allowed + os.sep):
+        return "Not found", 404
+    if not os.path.exists(safe):
+        return "Not found", 404
+    return send_file(safe, mimetype="application/javascript")
+
+
 @app.route("/")
 def index():
     """Serve the main SaaS UI (self-contained preview/index.html)."""
