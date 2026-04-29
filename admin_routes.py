@@ -48,6 +48,7 @@ from models import (
     create_admin_account,
     update_admin_last_login,
     get_daily_run_count,
+    get_metrics_series,
 )
 
 admin_bp = Blueprint("admin_bp", __name__, url_prefix="/admin")
@@ -1654,4 +1655,45 @@ def analytics():
         "total_users":       total_users,
         "days":              days,
         "as_of":             _utcnow().isoformat(),
+    }), 200
+
+
+# ---------------------------------------------------------------------------
+# GET /admin/api/metrics  — system resource monitoring time-series
+# ---------------------------------------------------------------------------
+
+@admin_bp.route("/api/metrics", methods=["GET"])
+@admin_portal_required
+def api_metrics():
+    """
+    Return time-series system metrics for the admin monitoring dashboard.
+
+    Query params:
+      range  24h | 7d | 30d  (default: 24h)
+
+    Response:
+      series  list of {ts, cpu_pct, ram_pct, ram_used_mb, ram_total_mb,
+                        screener_runs_active, http_connections, active_users_today}
+      latest  most recent data point (or empty dict if no data yet)
+      range   echoed back
+      count   number of data points
+      as_of   server timestamp
+    """
+    range_label = request.args.get("range", "24h")
+    if range_label not in ("24h", "7d", "30d"):
+        range_label = "24h"
+
+    try:
+        series = get_metrics_series(range_label)
+    except Exception as exc:
+        return jsonify({"error": f"Failed to load metrics: {exc}"}), 500
+
+    latest = series[-1] if series else {}
+
+    return jsonify({
+        "series": series,
+        "latest": latest,
+        "range":  range_label,
+        "count":  len(series),
+        "as_of":  _utcnow().isoformat(),
     }), 200

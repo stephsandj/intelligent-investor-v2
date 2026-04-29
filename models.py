@@ -1388,3 +1388,146 @@ def clear_failed_login_attempts(email: str) -> None:
             "DELETE FROM login_attempts WHERE email = %s AND success = FALSE",
             (email.lower(),),
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# System Metrics — monitoring dashboard
+# ─────────────────────────────────────────────────────────────────────────────
+
+def init_metrics_table() -> None:
+    """Create system_metrics table and its index if they do not already exist."""
+    with db_cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS system_metrics (
+                id                   BIGSERIAL PRIMARY KEY,
+                sampled_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                cpu_pct              REAL,
+                ram_pct              REAL,
+                ram_used_mb          INTEGER,
+                ram_total_mb         INTEGER,
+                screener_runs_active INTEGER DEFAULT 0,
+                http_connections     INTEGER DEFAULT 0,
+                active_users_today   INTEGER DEFAULT 0
+            )
+            """
+        )
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_system_metrics_ts
+            ON system_metrics (sampled_at DESC)
+            """
+        )
+
+
+def insert_metric_sample(
+    cpu_pct: float,
+    ram_pct: float,
+    ram_used_mb: int,
+    ram_total_mb: int,
+    screener_runs_active: int = 0,
+    http_connections: int = 0,
+    active_users_today: int = 0,
+) -> None:
+    """Insert one system metrics sample row. Called every 60 s by the scheduler leader."""
+    with db_cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO system_metrics
+                (sampled_at, cpu_pct, ram_pct, ram_used_mb, ram_total_mb,
+                 screener_runs_active, http_connections, active_users_today)
+            VALUES (NOW(), %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                cpu_pct, ram_pct, ram_used_mb, ram_total_mb,
+                screener_runs_active, http_connections, active_users_today,
+            ),
+        )
+
+
+def count_active_users_today() -> int:
+    """Count distinct users who have used at least one run today (EST/EDT date)."""
+    with db_cursor(commit=False) as cur:
+        cur.execute(
+            """
+            SELECT COUNT(*) AS cnt
+            FROM daily_runs
+            WHERE date = (NOW() AT TIME ZONE 'America/New_York')::date
+              AND run_count > 0
+            """
+        )
+        row = cur.fetchone()
+        return int(row["cnt"]) if row else 0
+
+
+def purge_old_metrics(days: int = 30) -> None:
+    """Delete metric samples older than *days* days. Swallows errors — non-critical."""
+    try:
+        with db_cursor() as cur:
+            cur.execute(
+                "DELETE FROM system_metrics WHERE sampled_at < NOW() - (%s || ' days')::interval",
+                (str(days),),
+            )
+    except Exception:
+        pass
+
+
+def get_metrics_series(range_label: str = "24h") -> List[Dict[str, Any]]:
+    """
+    Return aggregated metric time-series for the admin monitoring dashboard.
+
+    range_label:
+      "24h"  → 5-minute bucket averages over the last 24 hours
+      "7d"   → 1-hour bucket averages over the last 7 days
+      "30d"  → 6-hour bucket averages over the last 30 days
+
+    Returns a list of dicts, each with keys:
+      ts, cpu_pct, ram_pct, ram_used_mb, ram_total_mb,
+      screener_runs_active, http_connections, active_users_today
+    """
+    if range_label == "7d":
+        interval = "7 days"
+        bucket   = "1 hour"
+    elif range_label == "30d":
+        interval = "30 days"
+        bucket   = "6 hours"
+    else:  # 24h (default)
+        interval = "24 hours"
+        bucket   = "5 minutes"
+
+    # bucket is from a safe fixed set — not user input — so f-string here is safe
+    sql = f"""
+        SELECT
+            date_trunc('{bucket}', sampled_at)  AS ts,
+            AVG(cpu_pct)               AS cpu_pct,
+            AVG(ram_pct)               AS ram_pct,
+            AVG(ram_used_mb)           AS ram_used_mb,
+            AVG(ram_total_mb)          AS ram_total_mb,
+            AVG(screener_runs_active)  AS screener_runs_active,
+            AVG(http_connections)      AS http_connections,
+            AVG(active_users_today)    AS active_users_today
+        FROM system_metrics
+        WHERE sampled_at >= NOW() - (%s || ' days')::interval
+        GROUP BY 1
+        ORDER BY 1 ASC
+    """
+    # Parse interval days from the label for the parameterized query
+    interval_days = {"24 hours": "1", "7 days": "7", "30 days": "30"}[interval]
+
+    with db_cursor(commit=False) as cur:
+        cur.execute(sql, (interval_days,))
+        rows = cur.fetchall()
+
+    result: List[Dict[str, Any]] = []
+    for row in rows:
+        result.append({
+            "ts":                    row["ts"].isoformat() if row["ts"] else None,
+            "cpu_pct":               round(float(row["cpu_pct"] or 0), 1),
+            "ram_pct":               round(float(row["ram_pct"] or 0), 1),
+            "ram_used_mb":           int(row["ram_used_mb"] or 0),
+            "ram_total_mb":          int(row["ram_total_mb"] or 0),
+            "screener_runs_active":  round(float(row["screener_runs_active"] or 0), 2),
+            "http_connections":      round(float(row["http_connections"] or 0), 1),
+            "active_users_today":    round(float(row["active_users_today"] or 0), 1),
+        })
+    return result

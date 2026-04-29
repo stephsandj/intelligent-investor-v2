@@ -102,6 +102,13 @@ except ImportError:
     _pip_install("apscheduler")
     from apscheduler.schedulers.background import BackgroundScheduler
 
+# Metrics collector — lightweight, imported lazily so a missing psutil doesn't
+# break startup.  collect_and_store() is wired into the scheduler below.
+try:
+    import metrics_collector as _metrics_collector
+except Exception:
+    _metrics_collector = None  # type: ignore[assignment]
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. Paths & constants
 # ─────────────────────────────────────────────────────────────────────────────
@@ -258,6 +265,12 @@ try:
         models.init_db()
         _DB_AVAILABLE = True
         logger.info("Database initialised successfully.")
+        # Create system_metrics table for the monitoring dashboard
+        try:
+            models.init_metrics_table()
+            logger.info("System metrics table ready.")
+        except Exception as _metrics_table_err:
+            logger.warning("system_metrics table init skipped: %s", _metrics_table_err)
         # Migrate any remaining 'trial' status values to 'active'
         try:
             migrated_count = models.migrate_trial_status_to_active()
@@ -2367,6 +2380,26 @@ def _init_scheduler():
             max_instances=1,
         )
         logger.info("Scheduler: 60-second DB sync job registered")
+
+        # ── System metrics collection (monitoring dashboard) ──────────────
+        # Samples CPU, RAM, active runs, and HTTP connections once per minute.
+        # Only runs in the scheduler-leader worker — no cross-worker overhead.
+        if _metrics_collector is not None:
+            def _collect_metrics_job():
+                _metrics_collector.collect_and_store(AGENT_DIR)
+
+            scheduler.add_job(
+                _collect_metrics_job,
+                'interval',
+                seconds=60,
+                id='_metrics_collect',
+                name='System metrics sample (every 60 s)',
+                replace_existing=True,
+                max_instances=1,
+            )
+            logger.info("Scheduler: system metrics collection job registered")
+        else:
+            logger.warning("Scheduler: metrics_collector not available — monitoring charts will have no data")
 
         return scheduler
     except Exception as e:

@@ -263,6 +263,78 @@
     .stats-grid { grid-template-columns: repeat(2, 1fr); }
     .plan-grid { grid-template-columns: repeat(2, 1fr); }
   }
+
+  /* ── Monitoring Charts ──────────────────────────────────────────────── */
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.35; }
+  }
+  .range-btns { display: flex; gap: 8px; align-items: center; }
+  .range-btn {
+    padding: 5px 16px; border-radius: 20px; font-size: .8rem; font-weight: 600;
+    cursor: pointer; border: 1px solid var(--border); background: transparent;
+    color: var(--muted); transition: all .15s;
+  }
+  .range-btn.active {
+    border-color: var(--gold); color: var(--gold);
+    background: rgba(240,165,0,.1);
+  }
+  .range-btn:hover:not(.active) { border-color: var(--text); color: var(--text); }
+
+  .charts-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;
+  }
+  .chart-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+  }
+  .chart-header {
+    padding: 14px 18px 10px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .chart-title   { font-size: .88rem; font-weight: 600; }
+  .chart-subtitle { font-size: .72rem; color: var(--muted); margin-top: 2px; }
+  .chart-peak { font-size: .82rem; font-weight: 600; text-align: right; }
+  .chart-body { padding: 14px 14px 10px; height: 200px; position: relative; }
+
+  .monitor-live-bar {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+    margin-bottom: 20px;
+  }
+  .monitor-live-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px 18px;
+  }
+  .monitor-live-label {
+    font-size: .72rem; color: var(--muted); text-transform: uppercase;
+    letter-spacing: .06em; margin-bottom: 6px;
+  }
+  .monitor-live-val { font-size: 1.8rem; font-weight: 700; line-height: 1; }
+  .monitor-live-sub { font-size: .72rem; color: var(--muted); margin-top: 4px; }
+
+  .mon-refresh-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .mon-refresh-info {
+    display: flex; align-items: center; gap: 7px;
+    font-size: .75rem; color: var(--muted);
+  }
+  .pulse-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green); animation: pulse 2s infinite;
+    display: inline-block; flex-shrink: 0;
+  }
+  .mon-empty-state {
+    text-align: center; padding: 48px 20px; color: var(--muted);
+  }
+  .mon-empty-state .mon-empty-icon { font-size: 2.5rem; margin-bottom: 12px; }
+  .mon-empty-state p { font-size: .88rem; line-height: 1.7; }
+
+  @media (max-width: 900px) {
+    .charts-grid          { grid-template-columns: 1fr; }
+    .monitor-live-bar     { grid-template-columns: repeat(2, 1fr); }
+  }
 </style>
 </head>
 <body>
@@ -310,6 +382,12 @@
       </div>
       <div class="nav-item" onclick="showPage('audit')" id="nav-audit">
         <span class="icon">📋</span> Audit Log
+      </div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Infrastructure</div>
+      <div class="nav-item" onclick="showPage('monitoring')" id="nav-monitoring">
+        <span class="icon">📈</span> Monitoring
       </div>
     </div>
     <div class="sidebar-footer">
@@ -489,6 +567,115 @@
         </div>
       </div>
 
+      <!-- Monitoring Page -->
+      <div id="page-monitoring" class="page">
+
+        <!-- Live current-values row -->
+        <div class="monitor-live-bar">
+          <div class="monitor-live-card">
+            <div class="monitor-live-label">CPU Usage</div>
+            <div class="monitor-live-val" id="mon-cur-cpu" style="color:var(--green)">—</div>
+            <div class="monitor-live-sub">current sample</div>
+          </div>
+          <div class="monitor-live-card">
+            <div class="monitor-live-label">RAM Usage</div>
+            <div class="monitor-live-val" id="mon-cur-ram" style="color:var(--blue)">—</div>
+            <div class="monitor-live-sub" id="mon-cur-ram-gb">—</div>
+          </div>
+          <div class="monitor-live-card">
+            <div class="monitor-live-label">HTTP Connections</div>
+            <div class="monitor-live-val" id="mon-cur-conn" style="color:var(--gold)">—</div>
+            <div class="monitor-live-sub">active TCP connections</div>
+          </div>
+          <div class="monitor-live-card">
+            <div class="monitor-live-label">Active Users Today</div>
+            <div class="monitor-live-val" id="mon-cur-users" style="color:var(--purple)">—</div>
+            <div class="monitor-live-sub">ran screener today</div>
+          </div>
+        </div>
+
+        <!-- Time range selector + live indicator -->
+        <div class="mon-refresh-bar">
+          <div class="range-btns">
+            <span style="font-size:.78rem;color:var(--muted);margin-right:2px">Range:</span>
+            <button class="range-btn active" id="range-24h" onclick="setMonRange('24h')">24h</button>
+            <button class="range-btn"        id="range-7d"  onclick="setMonRange('7d')">7d</button>
+            <button class="range-btn"        id="range-30d" onclick="setMonRange('30d')">30d</button>
+          </div>
+          <div class="mon-refresh-info">
+            <span class="pulse-dot"></span>
+            Live · refreshes every 60 s
+            <span id="mon-last-update"></span>
+          </div>
+        </div>
+
+        <!-- Empty state (shown until first data arrives) -->
+        <div id="mon-empty-state" class="mon-empty-state" style="display:none">
+          <div class="mon-empty-icon">📊</div>
+          <p>No metrics data yet.<br>
+          The first sample arrives after the scheduler leader has been running for ~60 seconds.<br>
+          Check back in a moment and click <strong>↻ Refresh</strong>.</p>
+        </div>
+
+        <!-- 2×2 chart grid -->
+        <div class="charts-grid" id="mon-charts-grid">
+
+          <!-- CPU -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <div>
+                <div class="chart-title">🖥️ CPU Usage</div>
+                <div class="chart-subtitle">% utilization · sampled every 60 s</div>
+              </div>
+              <div class="chart-peak" id="mon-peak-cpu" style="color:var(--green)">—</div>
+            </div>
+            <div class="chart-body"><canvas id="chart-cpu"></canvas></div>
+          </div>
+
+          <!-- RAM -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <div>
+                <div class="chart-title">🧠 RAM Usage</div>
+                <div class="chart-subtitle">% of total physical memory</div>
+              </div>
+              <div class="chart-peak" id="mon-peak-ram" style="color:var(--blue)">—</div>
+            </div>
+            <div class="chart-body"><canvas id="chart-ram"></canvas></div>
+          </div>
+
+          <!-- HTTP Connections -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <div>
+                <div class="chart-title">🌐 HTTP Connections</div>
+                <div class="chart-subtitle">active TCP connections to app port</div>
+              </div>
+              <div class="chart-peak" id="mon-peak-conn" style="color:var(--gold)">—</div>
+            </div>
+            <div class="chart-body"><canvas id="chart-conn"></canvas></div>
+          </div>
+
+          <!-- Active Users -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <div>
+                <div class="chart-title">👥 Active Users Today</div>
+                <div class="chart-subtitle">users who ran screener on current EST day</div>
+              </div>
+              <div class="chart-peak" id="mon-peak-users" style="color:var(--purple)">—</div>
+            </div>
+            <div class="chart-body"><canvas id="chart-users"></canvas></div>
+          </div>
+
+        </div><!-- .charts-grid -->
+
+        <div style="text-align:center;color:var(--muted);font-size:.72rem;padding:4px 0 12px">
+          Metrics collected by scheduler leader worker only · stored 30 days · auto-purged nightly
+        </div>
+
+      </div><!-- #page-monitoring -->
+
     </div><!-- .content-area -->
   </div><!-- .main -->
 </div><!-- #app -->
@@ -644,6 +831,10 @@
 <!-- Toast -->
 <div id="toast"></div>
 
+<!-- Chart.js + date-fns adapter for time-scale charts -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
 <script>
 // ═══════════════════ State ═══════════════════
 var _users = [];
@@ -746,13 +937,26 @@ function showPage(name) {
   document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active'); });
   document.getElementById('page-' + name).classList.add('active');
   document.getElementById('nav-' + name).classList.add('active');
-  var titles = { dashboard: 'Dashboard', users: 'Users', plans: 'Plans', audit: 'Audit Log' };
+  var titles = {
+    dashboard:  'Dashboard',
+    users:      'Users',
+    plans:      'Plans',
+    audit:      'Audit Log',
+    monitoring: 'Monitoring',
+  };
   document.getElementById('page-title').textContent = titles[name] || name;
+
+  // Stop monitoring auto-refresh when leaving that page
+  if (_currentPage === 'monitoring' && name !== 'monitoring') {
+    _stopMonAutoRefresh();
+  }
+
   _currentPage = name;
-  if (name === 'users')     loadUsers();
-  if (name === 'plans')     loadPlans();
-  if (name === 'audit')     loadAuditLog();
-  if (name === 'dashboard') loadDashboard();
+  if (name === 'users')      loadUsers();
+  if (name === 'plans')      loadPlans();
+  if (name === 'audit')      loadAuditLog();
+  if (name === 'dashboard')  loadDashboard();
+  if (name === 'monitoring') { loadMonitoring(); _startMonAutoRefresh(); }
 }
 
 function refreshCurrentPage() { showPage(_currentPage); }
@@ -1249,6 +1453,207 @@ function _confirmCancel() {
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') _confirmCancel();
 });
+
+// ═══════════════════ Monitoring Charts ══════════════════════════════════
+var _monRange              = '24h';
+var _monCharts             = {};
+var _monAutoRefreshInterval = null;
+
+function setMonRange(range) {
+  _monRange = range;
+  ['24h', '7d', '30d'].forEach(function(r) {
+    var btn = document.getElementById('range-' + r);
+    if (btn) btn.classList.toggle('active', r === range);
+  });
+  loadMonitoring();
+}
+
+async function loadMonitoring() {
+  var r = await _api('GET', '/admin/api/metrics?range=' + _monRange);
+  if (!r.ok) {
+    showToast('Failed to load monitoring metrics', 'error');
+    return;
+  }
+
+  var series = r.data.series || [];
+  var latest = r.data.latest || {};
+
+  // ── Live current stats ────────────────────────────────────────────────
+  var cpuEl   = document.getElementById('mon-cur-cpu');
+  var ramEl   = document.getElementById('mon-cur-ram');
+  var ramGbEl = document.getElementById('mon-cur-ram-gb');
+  var connEl  = document.getElementById('mon-cur-conn');
+  var usersEl = document.getElementById('mon-cur-users');
+  if (cpuEl)   cpuEl.textContent   = latest.cpu_pct   != null ? latest.cpu_pct.toFixed(1)   + '%' : '—';
+  if (ramEl)   ramEl.textContent   = latest.ram_pct   != null ? latest.ram_pct.toFixed(1)   + '%' : '—';
+  if (ramGbEl && latest.ram_used_mb && latest.ram_total_mb) {
+    ramGbEl.textContent = (latest.ram_used_mb / 1024).toFixed(1) + ' / '
+                        + (latest.ram_total_mb / 1024).toFixed(1) + ' GB';
+  } else if (ramGbEl) {
+    ramGbEl.textContent = '—';
+  }
+  if (connEl)  connEl.textContent  = latest.http_connections    != null ? latest.http_connections    : '—';
+  if (usersEl) usersEl.textContent = latest.active_users_today  != null ? latest.active_users_today  : '—';
+
+  // ── Last-updated timestamp ────────────────────────────────────────────
+  var luEl = document.getElementById('mon-last-update');
+  if (luEl) luEl.textContent = ' · updated ' + new Date().toLocaleTimeString();
+
+  // ── No data yet — show empty state ───────────────────────────────────
+  var emptyEl  = document.getElementById('mon-empty-state');
+  var gridEl   = document.getElementById('mon-charts-grid');
+  if (!series.length) {
+    if (emptyEl)  emptyEl.style.display  = 'block';
+    if (gridEl)   gridEl.style.display   = 'none';
+    // Clear peak labels
+    ['cpu','ram','conn','users'].forEach(function(k) {
+      var el = document.getElementById('mon-peak-' + k);
+      if (el) el.textContent = '—';
+    });
+    return;
+  }
+  if (emptyEl)  emptyEl.style.display  = 'none';
+  if (gridEl)   gridEl.style.display   = '';
+
+  // ── Peak labels ───────────────────────────────────────────────────────
+  function _peak(key) {
+    return Math.max.apply(null, series.map(function(p) { return +(p[key] || 0); }));
+  }
+  var peakCpu   = _peak('cpu_pct');
+  var peakRam   = _peak('ram_pct');
+  var peakConn  = _peak('http_connections');
+  var peakUsers = _peak('active_users_today');
+
+  var pkCpu   = document.getElementById('mon-peak-cpu');
+  var pkRam   = document.getElementById('mon-peak-ram');
+  var pkConn  = document.getElementById('mon-peak-conn');
+  var pkUsers = document.getElementById('mon-peak-users');
+  if (pkCpu)   pkCpu.textContent   = 'Peak ' + peakCpu.toFixed(1)   + '%';
+  if (pkRam)   pkRam.textContent   = 'Peak ' + peakRam.toFixed(1)   + '%';
+  if (pkConn)  pkConn.textContent  = 'Peak ' + Math.round(peakConn);
+  if (pkUsers) pkUsers.textContent = 'Peak ' + Math.round(peakUsers);
+
+  // ── Build chart labels (Date objects for time scale) ─────────────────
+  var labels = series.map(function(p) { return new Date(p.ts); });
+
+  // ── Render charts ─────────────────────────────────────────────────────
+  _renderMonChart('chart-cpu',   labels, series.map(function(p) { return p.cpu_pct; }),
+    'CPU %',          '#3fb950', 'rgba(63,185,80,0.12)',   100);
+  _renderMonChart('chart-ram',   labels, series.map(function(p) { return p.ram_pct; }),
+    'RAM %',          '#58a6ff', 'rgba(88,166,255,0.12)',  100);
+  _renderMonChart('chart-conn',  labels, series.map(function(p) { return p.http_connections; }),
+    'Connections',    '#f0a500', 'rgba(240,165,0,0.12)',   null);
+  _renderMonChart('chart-users', labels, series.map(function(p) { return p.active_users_today; }),
+    'Active Users',   '#d2a8ff', 'rgba(210,168,255,0.12)', null);
+}
+
+function _renderMonChart(canvasId, labels, dataPoints, label, borderColor, bgColor, yMax) {
+  var canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+
+  // Destroy existing chart instance before re-creating
+  if (_monCharts[canvasId]) {
+    try { _monCharts[canvasId].destroy(); } catch(_) {}
+    _monCharts[canvasId] = null;
+  }
+
+  var ctx = canvas.getContext('2d');
+
+  var yConfig = {
+    grid:   { color: 'rgba(48,54,61,0.7)', drawBorder: false },
+    ticks:  { color: '#8b949e', font: { size: 10 }, maxTicksLimit: 5 },
+    border: { display: false },
+    beginAtZero: true,
+  };
+  if (yMax != null) {
+    yConfig.max = yMax;
+    yConfig.suggestedMax = yMax;
+  }
+
+  _monCharts[canvasId] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: label,
+        data: dataPoints,
+        borderColor: borderColor,
+        backgroundColor: bgColor,
+        borderWidth: 1.5,
+        fill: true,
+        tension: 0.35,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        pointHoverBackgroundColor: borderColor,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 300 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(22,27,34,0.96)',
+          borderColor: '#30363d',
+          borderWidth: 1,
+          titleColor: '#8b949e',
+          bodyColor: '#e6edf3',
+          titleFont: { size: 11 },
+          bodyFont:  { size: 12, weight: 'bold' },
+          padding: 10,
+          callbacks: {
+            title: function(items) {
+              if (!items.length) return '';
+              return new Date(items[0].parsed.x).toLocaleString(undefined, {
+                month: 'short', day: 'numeric',
+                hour: '2-digit', minute: '2-digit',
+              });
+            },
+            label: function(item) {
+              var v = item.raw;
+              if (v == null) return label + ': —';
+              if (label.includes('%')) return label + ': ' + (+v).toFixed(1) + '%';
+              return label + ': ' + Math.round(v);
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: {
+            tooltipFormat: 'MMM d, HH:mm',
+            displayFormats: {
+              minute: 'HH:mm',
+              hour:   'MMM d HH:mm',
+              day:    'MMM d',
+            },
+          },
+          grid:   { color: 'rgba(48,54,61,0.5)', drawBorder: false },
+          ticks:  { color: '#8b949e', font: { size: 10 }, maxTicksLimit: 7, maxRotation: 0 },
+          border: { display: false },
+        },
+        y: yConfig,
+      },
+    },
+  });
+}
+
+function _startMonAutoRefresh() {
+  _stopMonAutoRefresh();
+  _monAutoRefreshInterval = setInterval(function() {
+    if (_currentPage === 'monitoring') loadMonitoring();
+  }, 60000);
+}
+
+function _stopMonAutoRefresh() {
+  if (_monAutoRefreshInterval) {
+    clearInterval(_monAutoRefreshInterval);
+    _monAutoRefreshInterval = null;
+  }
+}
 </script>
 
 <!-- In-app confirm dialog -->

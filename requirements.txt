@@ -31,3 +31,6 @@ schedule>=1.2.0
 
 # Utilities
 python-dotenv>=1.0.0
+
+# System monitoring (admin metrics dashboard)
+psutil>=5.9.0
