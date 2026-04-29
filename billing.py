@@ -145,6 +145,56 @@ def create_checkout_session(user_id: str, plan_name: str, billing_cycle: str) ->
         raise RuntimeError(f"Stripe error: {exc.user_message or str(exc)}")
 
 
+def _get_or_create_stripe_customer(user_id: str, subscription: dict) -> str:
+    """
+    Return the Stripe customer ID for the given user.
+
+    If no customer ID is stored (e.g. the plan was admin-provisioned or
+    pre-dates the Stripe integration), a new Stripe Customer is created
+    using the user's email and name, persisted to the subscriptions table,
+    and returned.  Subsequent calls will find the stored ID immediately.
+
+    Raises RuntimeError on Stripe API failure.
+    """
+    customer_id = subscription.get("stripe_customer_id")
+    if customer_id:
+        return customer_id
+
+    # No customer on file — create one via the Stripe API
+    user = models.get_user_by_id(user_id)
+    if not user:
+        raise RuntimeError("User account not found")
+
+    stripe.api_key = _stripe_secret()
+    try:
+        customer = stripe.Customer.create(
+            email=user["email"],
+            name=user.get("full_name") or user["email"],
+            metadata={"user_id": user_id},
+        )
+    except stripe.error.StripeError as exc:
+        raise RuntimeError(
+            f"Could not create Stripe customer: {exc.user_message or str(exc)}"
+        )
+
+    new_customer_id = customer["id"]
+
+    # Persist to subscriptions so the next call skips creation
+    with models.db_cursor() as cur:
+        cur.execute(
+            "UPDATE subscriptions SET stripe_customer_id = %s WHERE user_id = %s",
+            (new_customer_id, user_id),
+        )
+
+    logger.info(
+        "Auto-created Stripe customer %s for user %s "
+        "(plan was admin-provisioned with no prior Stripe customer record)",
+        new_customer_id,
+        user_id,
+    )
+    return new_customer_id
+
+
 def create_customer_portal_session(stripe_customer_id: str) -> str:
     """
     Create a Stripe Customer Portal session for the given customer.
@@ -430,19 +480,20 @@ def portal():
     """
     GET /billing/portal
     Returns {"portal_url": "https://billing.stripe.com/..."}
+
+    Handles admin-provisioned accounts (no stripe_customer_id) by
+    auto-creating a Stripe Customer record on first access.
     """
     subscription = models.get_user_subscription(g.user_id)
     if not subscription:
         return jsonify({"error": "No subscription found"}), 404
 
-    customer_id = subscription.get("stripe_customer_id")
-    if not customer_id:
-        return jsonify({"error": "No Stripe customer on file. Please contact support."}), 404
-
     try:
-        portal_url = create_customer_portal_session(customer_id)
+        # Auto-creates a Stripe customer if the plan was admin-provisioned
+        customer_id = _get_or_create_stripe_customer(g.user_id, subscription)
+        portal_url  = create_customer_portal_session(customer_id)
     except RuntimeError as exc:
-        logger.error("portal route error: %s", exc)
+        logger.error("portal route error for user %s: %s", g.user_id, exc)
         return jsonify({"error": str(exc)}), 500
 
     return jsonify({"portal_url": portal_url})
@@ -516,29 +567,36 @@ def success():
             session_id, user_id, plan_name, plan_id, customer_id, stripe_sub_id
         )
 
-        # Build UPDATE statement
+        # Build UPDATE statement — two explicit SQL templates instead of a
+        # dynamic f-string so static analysis (Bandit B608) stays clean.
+        # All column names are hardcoded; only VALUES go through %s params.
         from datetime import datetime, timezone
         now_utc = datetime.now(timezone.utc)
 
-        update_fields = [
-            "stripe_customer_id = COALESCE(%s, stripe_customer_id)",
-            "stripe_sub_id = COALESCE(%s, stripe_sub_id)",
-            "status = 'active'",
-            "activated_at = %s",
-        ]
-        update_values = [customer_id, stripe_sub_id, now_utc]
-
         if plan_id:
-            update_fields.append("plan_id = %s")
-            update_values.append(plan_id)
-
-        update_values.append(user_id)
+            sql = (
+                "UPDATE subscriptions "
+                "SET stripe_customer_id = COALESCE(%s, stripe_customer_id), "
+                "    stripe_sub_id      = COALESCE(%s, stripe_sub_id), "
+                "    status             = 'active', "
+                "    activated_at       = %s, "
+                "    plan_id            = %s "
+                "WHERE user_id = %s"
+            )
+            update_values = [customer_id, stripe_sub_id, now_utc, plan_id, user_id]
+        else:
+            sql = (
+                "UPDATE subscriptions "
+                "SET stripe_customer_id = COALESCE(%s, stripe_customer_id), "
+                "    stripe_sub_id      = COALESCE(%s, stripe_sub_id), "
+                "    status             = 'active', "
+                "    activated_at       = %s "
+                "WHERE user_id = %s"
+            )
+            update_values = [customer_id, stripe_sub_id, now_utc, user_id]
 
         with models.db_cursor() as cur:
-            cur.execute(
-                f"UPDATE subscriptions SET {', '.join(update_fields)} WHERE user_id = %s",
-                update_values,
-            )
+            cur.execute(sql, update_values)
 
         logger.info(
             "success: subscription updated for user %s — plan: %s, status: active",

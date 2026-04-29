@@ -13,10 +13,21 @@ Reads plan limits from the database, cached in memory for 5 minutes.
 
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 import models
+
+_TZ_EST = ZoneInfo("America/New_York")
+
+
+def _next_midnight_est_label() -> str:
+    """Return a human-readable label for when today's screen count resets (midnight EST/EDT)."""
+    now_est = datetime.now(_TZ_EST)
+    midnight = (now_est + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    tz_label = "EDT" if midnight.dst() else "EST"
+    return midnight.strftime(f"%-I:%M %p {tz_label}")
 
 logger = logging.getLogger(__name__)
 
@@ -157,6 +168,7 @@ def check_plan_access(user_id: str, skip_run_limit: bool = False) -> Dict[str, A
         "runs_today": runs_today,
         "runs_limit": runs_limit,
         "features": raw_features,
+        "resets_at": _next_midnight_est_label(),  # e.g. "12:00 AM EDT"
     }
 
     # Status checks

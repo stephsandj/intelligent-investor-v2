@@ -2535,10 +2535,21 @@ def send_email_confirmation(
             print(f"  [Email] Warning: PDF not found at {pdf_path} — sending without attachment")
             sys.stdout.flush()
 
-        print(f"  Connecting to smtp.gmail.com:465 …")
+        # Read SMTP settings from env — matches auth.py behaviour so any custom
+        # SMTP server (e.g. Namecheap Private Email on port 587) is honoured.
+        smtp_server = os.environ.get("GMAIL_SMTP_SERVER", "smtp.gmail.com")
+        smtp_port   = int(os.environ.get("GMAIL_SMTP_PORT", "465"))
+        print(f"  Connecting to {smtp_server}:{smtp_port} …")
         sys.stdout.flush()
         # timeout=30 prevents indefinite blocking if the network is stale/unavailable
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=30) as server:
+        if smtp_port == 465:
+            server_ctx = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=30)
+        else:
+            server_ctx = smtplib.SMTP(smtp_server, smtp_port, timeout=30)
+            server_ctx.ehlo()
+            server_ctx.starttls()
+            server_ctx.ehlo()
+        with server_ctx as server:
             server.login(EMAIL_FROM, EMAIL_APP_PWD)
             server.send_message(msg)
 

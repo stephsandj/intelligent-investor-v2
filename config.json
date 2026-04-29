@@ -1,11 +1,13 @@
 {
-  "email_enabled": true,
+  "email_enabled": false,
   "pdf_enabled": true,
-  "markets": [],
-  "loser_period": "daily100",
-  "stock_geography": "international",
-  "schedule_hour": 23,
-  "schedule_minute": 35,
+  "markets": [
+    "NASDAQ"
+  ],
+  "loser_period": "weekly100",
+  "stock_geography": "usa",
+  "schedule_hour": 20,
+  "schedule_minute": 0,
   "schedule_days": [
     0,
     1,
@@ -14,5 +16,5 @@
     4
   ],
   "enabled": true,
-  "email_address": "stephane.sandjong@gmail.com"
+  "email_address": null
 }

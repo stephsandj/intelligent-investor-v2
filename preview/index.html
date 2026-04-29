@@ -129,10 +129,6 @@
   .form-group input[type="password"]:focus { border-color:var(--orange); }
   .form-group input[type="checkbox"] { accent-color: var(--orange); }
   .form-group input[type="checkbox"]:hover { opacity: 0.8; }
-  .field-error { color:var(--red); font-size:.78rem; margin-top:5px; display:none; line-height:1.4; }
-  .field-error.visible { display:block; }
-  .form-group input.input-error { border-color:var(--red) !important; }
-  .form-group input.input-error:focus { border-color:var(--red) !important; }
   .submit-btn { width:100%; padding:11px; background:var(--orange); color:#000; border:none; border-radius:8px; font-weight:700; font-size:.9rem; cursor:pointer; margin-top:8px; }
   .submit-btn:hover { opacity:.9; }
 
@@ -548,57 +544,6 @@
   .stat-cell { background:var(--surface); padding:14px 18px; text-align:center; }
   .stat-num  { font-size:1.5rem; font-weight:800; color:var(--orange); }
   .stat-lbl  { font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin-top:2px; }
-
-  /* ══ Site Footer ══════════════════════════════════════════════════ */
-  .site-footer { background:#010409; border-top:1px solid var(--border); padding:52px 48px 0; margin-top:auto; }
-  .footer-inner { max-width:1100px; margin:0 auto; }
-  .footer-grid { display:grid; grid-template-columns:2.2fr 1fr 1fr 1fr; gap:48px; padding-bottom:44px; }
-  .footer-brand-logo { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
-  .footer-brand-logo img { height:28px; width:auto; }
-  .footer-brand p { color:var(--muted); font-size:.83rem; line-height:1.65; max-width:260px; }
-  .footer-col h4 { font-size:.72rem; font-weight:700; color:var(--text); text-transform:uppercase; letter-spacing:.1em; margin-bottom:18px; }
-  .footer-col ul { list-style:none; display:flex; flex-direction:column; gap:11px; }
-  .footer-col ul li { font-size:.84rem; color:var(--muted); display:flex; align-items:flex-start; gap:9px; line-height:1.45; }
-  .footer-col ul li .fi { color:var(--orange); flex-shrink:0; margin-top:1px; }
-  .footer-link { color:var(--muted); text-decoration:none; font-size:.84rem; cursor:pointer; background:none; border:none; padding:0; font-family:inherit; transition:color .15s; display:block; }
-  .footer-link:hover { color:var(--orange); }
-  .footer-divider { border:none; border-top:1px solid var(--border); margin:0; }
-  .footer-bottom { padding:18px 0 20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
-  .footer-copy { color:var(--muted); font-size:.77rem; }
-  .footer-bottom-links { display:flex; gap:22px; }
-  @media(max-width:860px) {
-    .footer-grid { grid-template-columns:1fr 1fr; gap:32px; }
-    .footer-brand { grid-column:1/-1; }
-  }
-  @media(max-width:520px) {
-    .site-footer { padding:40px 24px 0; }
-    .footer-grid { grid-template-columns:1fr; gap:28px; }
-    .footer-bottom { flex-direction:column; align-items:flex-start; }
-  }
-
-  /* ══ Legal / Privacy / T&C Overlay ════════════════════════════════ */
-  .legal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.78); z-index:700; display:none; align-items:center; justify-content:center; padding:20px; }
-  .legal-overlay.open { display:flex; }
-  .legal-box { background:var(--surface); border:1px solid var(--border); border-radius:16px; width:100%; max-width:740px; max-height:90vh; display:flex; flex-direction:column; animation:slideIn .22s ease; box-shadow:0 24px 80px rgba(0,0,0,.6); }
-  .legal-hdr { display:flex; align-items:center; gap:16px; padding:22px 28px; border-bottom:1px solid var(--border); flex-shrink:0; }
-  .legal-hdr img { height:40px; width:auto; max-width:180px; flex-shrink:0; object-fit:contain; object-position:left; }
-  .legal-hdr-text { flex:1; min-width:0; }
-  .legal-hdr-text h2 { font-size:1.05rem; font-weight:800; margin:0; }
-  .legal-hdr-text p { color:var(--muted); font-size:.75rem; margin:3px 0 0; }
-  .legal-x { background:none; border:1px solid var(--border); color:var(--muted); font-size:1rem; cursor:pointer; padding:5px 9px; border-radius:7px; flex-shrink:0; line-height:1; transition:all .15s; }
-  .legal-x:hover { border-color:var(--orange); color:var(--text); }
-  .legal-scroll { overflow-y:auto; padding:28px 32px; flex:1; }
-  .legal-scroll::-webkit-scrollbar { width:5px; }
-  .legal-scroll::-webkit-scrollbar-track { background:transparent; }
-  .legal-scroll::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
-  .legal-scroll::-webkit-scrollbar-thumb:hover { background:var(--muted); }
-  .legal-scroll h3 { font-size:.88rem; font-weight:700; color:var(--orange); margin:26px 0 9px; padding-bottom:6px; border-bottom:1px solid rgba(240,165,0,.15); }
-  .legal-scroll h3:first-child { margin-top:0; }
-  .legal-scroll p { color:var(--muted); font-size:.83rem; line-height:1.75; margin-bottom:10px; }
-  .legal-scroll ul { color:var(--muted); font-size:.83rem; line-height:1.75; padding-left:18px; margin-bottom:10px; }
-  .legal-scroll ul li { margin-bottom:4px; }
-  .legal-scroll strong { color:var(--text); }
-  .legal-ftr { padding:16px 28px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; flex-shrink:0; }
 </style>
 </head>
 <body>
@@ -647,50 +592,26 @@
     <div class="form-pane" id="auth-pane-register">
       <div class="form-group">
         <label>Full name</label>
-        <input type="text" id="r-name" placeholder=""
-               oninput="_clearRegField('r-name')"
-               autocomplete="name">
-        <div id="r-name-error" class="field-error"></div>
+        <input type="text" id="r-name" placeholder="">
       </div>
       <div class="form-group">
         <label>Email address</label>
-        <input type="email" id="r-email" placeholder=""
-               oninput="_clearRegField('r-email')"
-               onblur="_blurValidateRegEmail()"
-               autocomplete="email">
-        <div id="r-email-error" class="field-error"></div>
+        <input type="email" id="r-email" placeholder="">
       </div>
       <div class="form-group">
         <label>Password <small style="color:var(--muted)">(min 12 chars)</small></label>
-        <input type="password" id="r-pwd" placeholder=""
-               oninput="updatePasswordStrength('r-pwd', 'r-strength'); _clearRegField('r-pwd')"
-               autocomplete="new-password">
+        <input type="password" id="r-pwd" placeholder="" oninput="updatePasswordStrength('r-pwd', 'r-strength')">
         <div id="r-strength" style="margin-top:8px; font-size:.75rem;"></div>
-        <div id="r-pwd-error" class="field-error"></div>
       </div>
       <div class="form-group" style="margin-bottom: 20px;">
         <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; user-select: none;">
-          <input type="checkbox" id="r-disclaimer" style="margin-top: 3px; cursor: pointer; width: 16px; height: 16px; flex-shrink: 0; accent-color: var(--orange);">
-          <span style="font-size: 0.82rem; line-height: 1.55; color: var(--muted);">
-            I have read and agree to the
-            <button type="button" onclick="openLegalModal('terms')"
-              style="background:none;border:none;color:var(--orange);font-size:inherit;cursor:pointer;padding:0;font-family:inherit;text-decoration:underline;text-underline-offset:2px;">
-              Terms &amp; Conditions
-            </button>,
-            <button type="button" onclick="openLegalModal('privacy')"
-              style="background:none;border:none;color:var(--orange);font-size:inherit;cursor:pointer;padding:0;font-family:inherit;text-decoration:underline;text-underline-offset:2px;">
-              Privacy Notice
-            </button>,
-            and
-            <button type="button" onclick="openLegalModal('legal')"
-              style="background:none;border:none;color:var(--orange);font-size:inherit;cursor:pointer;padding:0;font-family:inherit;text-decoration:underline;text-underline-offset:2px;">
-              Legal Notices
-            </button>
-            of Terminal Investor. I understand this platform is for research and educational purposes only, does not constitute financial or investment advice, and that investing involves risk including the possible loss of principal. I am solely responsible for my investment decisions.
+          <input type="checkbox" id="r-disclaimer" style="margin-top: 2px; cursor: pointer; width: 18px; height: 18px; flex-shrink: 0;">
+          <span style="font-size: 0.85rem; line-height: 1.5; color: var(--muted);">
+            I understand this tool is for research and educational purposes only and does not constitute financial advice. Investing involves risk, including potential loss of principal. I am solely responsible for my investment decisions.
           </span>
         </label>
-        <div id="r-disclaimer-error" style="color: var(--red); font-size: 0.78rem; margin-top: 8px; display: none;">
-          ✗ You must read and agree to the Terms &amp; Conditions to create an account
+        <div id="r-disclaimer-error" style="color: var(--red); font-size: 0.8rem; margin-top: 8px; display: none;">
+          ✗ You must agree to the disclaimer to create an account
         </div>
       </div>
       <button class="submit-btn" onclick="doRegister()">Start Free Trial →</button>
@@ -1162,297 +1083,6 @@
     </div>
   </div>
 
-  <!-- ══ SITE FOOTER ═══════════════════════════════════════════════ -->
-  <footer class="site-footer">
-    <div class="footer-inner">
-      <div class="footer-grid">
-
-        <!-- Brand -->
-        <div class="footer-brand">
-          <div class="footer-brand-logo">
-            <img src="/logo.png" alt="Terminal Investor">
-          </div>
-          <p>Institutional-grade value &amp; growth screening for individual investors. Powered by real-time fundamentals, AI analysis, and Graham–Buffett principles.</p>
-        </div>
-
-        <!-- Contact -->
-        <div class="footer-col">
-          <h4>Contact Us</h4>
-          <ul>
-            <li>
-              <span class="fi">✉</span>
-              <a href="mailto:sales@terminalelearn.com" class="footer-link">sales@terminalelearn.com</a>
-            </li>
-            <li>
-              <span class="fi">📞</span>
-              <a href="tel:+18008376462" class="footer-link">+1 (800) TERMINA<br><span style="font-size:.75rem;color:var(--muted);padding-left:0">(800) 837-6462</span></a>
-            </li>
-            <li>
-              <span class="fi">📍</span>
-              <span>5900 Balcones Drive<br>Suite 100<br>Austin, TX 78731</span>
-            </li>
-          </ul>
-        </div>
-
-        <!-- Product -->
-        <div class="footer-col">
-          <h4>Product</h4>
-          <ul>
-            <li><button class="footer-link" onclick="showAuthModal('register')">Start Free Trial</button></li>
-            <li><button class="footer-link" onclick="showAuthModal('signin')">Sign In</button></li>
-            <li><button class="footer-link" onclick="showSampleReport()">Sample Report</button></li>
-            <li><button class="footer-link" onclick="document.querySelector('.pricing').scrollIntoView({behavior:'smooth'})">Pricing</button></li>
-          </ul>
-        </div>
-
-        <!-- Legal -->
-        <div class="footer-col">
-          <h4>Legal</h4>
-          <ul>
-            <li><button class="footer-link" onclick="openLegalModal('legal')">Legal Notices</button></li>
-            <li><button class="footer-link" onclick="openLegalModal('privacy')">Privacy Notice</button></li>
-            <li><button class="footer-link" onclick="openLegalModal('terms')">Terms &amp; Conditions</button></li>
-          </ul>
-        </div>
-
-      </div><!-- /footer-grid -->
-
-      <hr class="footer-divider">
-
-      <div class="footer-bottom">
-        <span class="footer-copy">Copyright &copy; <span id="footer-year"></span> Terminal Elearn. All Rights Reserved.</span>
-        <div class="footer-bottom-links">
-          <button class="footer-link" onclick="openLegalModal('legal')">Legal Notices</button>
-          <button class="footer-link" onclick="openLegalModal('privacy')">Privacy Notice</button>
-          <button class="footer-link" onclick="openLegalModal('terms')">Terms &amp; Conditions</button>
-        </div>
-      </div>
-
-    </div><!-- /footer-inner -->
-  </footer>
-  <!-- ══ END FOOTER ════════════════════════════════════════════════ -->
-
-</div><!-- /page-landing -->
-
-<!-- ══════════════════════════════════════════════════════════════════
-     LEGAL NOTICES MODAL
-══════════════════════════════════════════════════════════════════ -->
-<div class="legal-overlay" id="legal-overlay-legal" onclick="if(event.target===this)closeLegalModal('legal')">
-  <div class="legal-box">
-    <div class="legal-hdr">
-      <img src="/logo.png" alt="Terminal Investor">
-      <div class="legal-hdr-text">
-        <h2>Legal Notices</h2>
-        <p>Effective January 1, 2026 &nbsp;·&nbsp; Terminal Elearn, Inc.</p>
-      </div>
-      <button class="legal-x" onclick="closeLegalModal('legal')">✕</button>
-    </div>
-    <div class="legal-scroll">
-      <h3>1. Not a Registered Investment Advisor</h3>
-      <p>Terminal Investor is operated by Terminal Elearn, Inc. ("Company," "we," "us," or "our"). The Company is <strong>not a registered investment advisor, broker-dealer, financial planner, or fiduciary</strong> under the Investment Advisers Act of 1940, the Securities Exchange Act of 1934, or any applicable state securities laws. Nothing contained on this platform constitutes investment advice, a recommendation, an offer to buy or sell any security, or a solicitation of any offer to buy or sell any security.</p>
-
-      <h3>2. For Informational and Educational Purposes Only</h3>
-      <p>All content, data, screener outputs, AI-generated analysis, PDF reports, ETF screens, and bond screens provided through the Terminal Investor platform are for <strong>informational and educational purposes only</strong>. Users are solely responsible for their own investment research and decisions. You should consult a licensed financial advisor, tax professional, or attorney before making any investment decision.</p>
-
-      <h3>3. No Warranty on Data Accuracy</h3>
-      <p>Financial data is sourced from third-party providers including Yahoo Finance (yfinance), Financial Modeling Prep (FMP), and NASDAQ data feeds. While we strive to display accurate and timely information, we make <strong>no representations or warranties, express or implied</strong>, regarding the completeness, accuracy, reliability, suitability, or availability of any data, reports, or other content. Data may be delayed, incomplete, or contain errors outside of our control.</p>
-
-      <h3>4. Algorithmic Screening Limitations</h3>
-      <p>Terminal Investor's screening algorithms apply quantitative filters based on publicly available fundamental data. Screening criteria are derived from methodologies inspired by Benjamin Graham and Warren Buffett but do not represent the actual views, endorsements, or investment processes of any person. <strong>Past screening results are not indicative of future investment performance.</strong> A stock appearing in a screen output is not a buy recommendation.</p>
-
-      <h3>5. Investment Risk Disclosure</h3>
-      <p>Investing in securities involves <strong>significant risk</strong>, including the possible loss of all principal invested. Stock prices can and do go to zero. ETF and bond investments are subject to interest rate risk, credit risk, market risk, and liquidity risk. The value of investments may fluctuate, and investors may receive back less than they invest. Past performance is not a guarantee of future results.</p>
-
-      <h3>6. Forward-Looking Statements</h3>
-      <p>Certain information and AI-generated analysis may contain forward-looking statements that involve known and unknown risks, uncertainties, and other factors. These statements are not guarantees of future performance and actual results may differ materially. We expressly disclaim any obligation to update forward-looking statements.</p>
-
-      <h3>7. Limitation of Liability</h3>
-      <p>To the maximum extent permitted by applicable law, the Company, its officers, directors, employees, agents, and licensors shall not be liable for any indirect, incidental, special, punitive, consequential, or exemplary damages, including but not limited to lost profits, lost data, financial losses, or investment losses arising out of or in connection with your use of the platform, even if the Company has been advised of the possibility of such damages. Our aggregate liability shall not exceed the amount paid by you to the Company in the twelve (12) months preceding the claim.</p>
-
-      <h3>8. Intellectual Property</h3>
-      <p>All software, design, code, algorithms, reports, documentation, branding, and content on the Terminal Investor platform are the exclusive intellectual property of Terminal Elearn, Inc. and are protected by copyright, trade secret, and other applicable laws. You may not copy, reproduce, distribute, modify, create derivative works of, publicly display, or commercially exploit any content without our prior written consent.</p>
-
-      <h3>9. Third-Party Data Providers</h3>
-      <p>We use data from Yahoo Finance, Financial Modeling Prep, and other providers subject to their own terms of service. We are not affiliated with, endorsed by, or sponsored by these providers. References to third-party products or services are for informational purposes only.</p>
-
-      <h3>10. Governing Law and Jurisdiction</h3>
-      <p>These Legal Notices and any disputes arising from your use of the platform shall be governed by the laws of the State of Texas, without regard to its conflict of law principles. You consent to the exclusive jurisdiction of the state and federal courts located in Travis County, Texas for resolution of any disputes.</p>
-
-      <h3>11. Contact</h3>
-      <p>For legal inquiries, contact us at <strong>legal@terminalelearn.com</strong> or by mail at 5900 Balcones Drive, Suite 100, Austin, TX 78731.</p>
-    </div>
-    <div class="legal-ftr">
-      <button class="btn btn-orange" onclick="closeLegalModal('legal')">Close</button>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════════════════════════════════
-     PRIVACY NOTICE MODAL
-══════════════════════════════════════════════════════════════════ -->
-<div class="legal-overlay" id="legal-overlay-privacy" onclick="if(event.target===this)closeLegalModal('privacy')">
-  <div class="legal-box">
-    <div class="legal-hdr">
-      <img src="/logo.png" alt="Terminal Investor">
-      <div class="legal-hdr-text">
-        <h2>Privacy Notice</h2>
-        <p>Effective January 1, 2026 &nbsp;·&nbsp; Terminal Elearn, Inc.</p>
-      </div>
-      <button class="legal-x" onclick="closeLegalModal('privacy')">✕</button>
-    </div>
-    <div class="legal-scroll">
-      <h3>1. Introduction</h3>
-      <p>Terminal Elearn, Inc. ("Company," "we," "us," or "our") is committed to protecting your privacy. This Privacy Notice explains how we collect, use, disclose, and safeguard your information when you use the Terminal Investor platform accessible at our website and web application (the "Service").</p>
-      <p>By using the Service, you acknowledge that you have read and understood this Privacy Notice. If you do not agree with its terms, please do not access or use our Service.</p>
-
-      <h3>2. Information We Collect</h3>
-      <p><strong>Account Information:</strong> When you register, we collect your full name, email address, and a securely hashed password (we never store your password in plain text).</p>
-      <p><strong>Profile Information:</strong> Optionally, information you provide when updating your profile.</p>
-      <p><strong>Usage Data:</strong> We collect information about how you interact with the Service, including screener runs, PDF report generation, pages visited, timestamps, and feature usage. This data is stored in our database to provide and improve the Service.</p>
-      <p><strong>Device and Technical Data:</strong> Your browser type, operating system, IP address, and general location may be logged for security, fraud prevention, and analytics purposes.</p>
-      <p><strong>Payment Data:</strong> Payment processing is handled exclusively by Stripe, Inc. We do <strong>not</strong> store your credit card numbers, bank account details, or full payment instrument details on our servers.</p>
-
-      <h3>3. How We Use Your Information</h3>
-      <ul>
-        <li>To create and manage your account</li>
-        <li>To deliver screener results, AI analysis, and PDF reports</li>
-        <li>To process subscription payments via Stripe</li>
-        <li>To send verification, notification, and transactional emails</li>
-        <li>To respond to your inquiries and provide customer support</li>
-        <li>To detect and prevent fraud, abuse, and security incidents</li>
-        <li>To comply with legal obligations</li>
-        <li>To improve and develop the Service</li>
-      </ul>
-      <p>We do <strong>not</strong> sell, rent, or trade your personal information to third parties for marketing purposes.</p>
-
-      <h3>4. Data Storage and Security</h3>
-      <p>Your data is stored in a PostgreSQL database. Passwords are hashed using bcrypt before storage. Authentication is managed via JWT tokens with short expiration windows. We use HTTPS/TLS encryption for all data in transit.</p>
-      <p>While we implement industry-standard security measures, no system is 100% secure. You are responsible for maintaining the confidentiality of your login credentials.</p>
-
-      <h3>5. Third-Party Service Providers</h3>
-      <ul>
-        <li><strong>Stripe, Inc.</strong> — Payment processing. Subject to Stripe's own Privacy Policy.</li>
-        <li><strong>Google (Gmail SMTP)</strong> — Transactional email delivery.</li>
-        <li><strong>Yahoo Finance / yfinance</strong> — Market data provider. No personal data is shared.</li>
-        <li><strong>Financial Modeling Prep (FMP)</strong> — Fundamental data provider. No personal data is shared.</li>
-      </ul>
-
-      <h3>6. Cookies and Local Storage</h3>
-      <p>We use <strong>HttpOnly cookies</strong> to store authentication tokens securely. We use <strong>localStorage</strong> and <strong>sessionStorage</strong> in your browser to persist UI state (e.g., active view, session information). We do not use advertising cookies or third-party tracking cookies.</p>
-
-      <h3>7. Email Communications</h3>
-      <p>By creating an account, you consent to receive transactional emails such as account verification, password resets, and screener result notifications. You may manage email delivery preferences in your Account settings. We do not send unsolicited marketing emails without your explicit consent.</p>
-
-      <h3>8. Data Retention</h3>
-      <p>We retain your personal data for as long as your account is active or as needed to provide the Service. If you close your account, we will delete or anonymize your personal data within 90 days, except where we are required to retain it for legal, regulatory, or legitimate business purposes (e.g., billing records).</p>
-
-      <h3>9. Your Rights</h3>
-      <p>Depending on your jurisdiction, you may have the right to:</p>
-      <ul>
-        <li>Access the personal data we hold about you</li>
-        <li>Correct inaccurate or incomplete data</li>
-        <li>Request deletion of your personal data ("right to be forgotten")</li>
-        <li>Object to or restrict certain processing</li>
-        <li>Data portability</li>
-      </ul>
-      <p>To exercise these rights, contact us at <strong>legal@terminalelearn.com</strong>.</p>
-
-      <h3>10. Children's Privacy</h3>
-      <p>The Service is not directed to individuals under the age of 18. We do not knowingly collect personal information from minors. If you believe a minor has provided us with personal data, please contact us immediately.</p>
-
-      <h3>11. Changes to This Notice</h3>
-      <p>We may update this Privacy Notice periodically. We will notify you of material changes by posting the updated notice on this page with a new effective date. Your continued use of the Service after changes are posted constitutes acceptance of the updated notice.</p>
-
-      <h3>12. Contact Us</h3>
-      <p>For privacy-related questions or requests, contact: <strong>legal@terminalelearn.com</strong><br>Terminal Elearn, Inc. &nbsp;·&nbsp; 5900 Balcones Drive, Suite 100, Austin, TX 78731</p>
-    </div>
-    <div class="legal-ftr">
-      <button class="btn btn-orange" onclick="closeLegalModal('privacy')">Close</button>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════════════════════════════════
-     TERMS & CONDITIONS MODAL
-══════════════════════════════════════════════════════════════════ -->
-<div class="legal-overlay" id="legal-overlay-terms" onclick="if(event.target===this)closeLegalModal('terms')">
-  <div class="legal-box">
-    <div class="legal-hdr">
-      <img src="/logo.png" alt="Terminal Investor">
-      <div class="legal-hdr-text">
-        <h2>Terms &amp; Conditions</h2>
-        <p>Effective January 1, 2026 &nbsp;·&nbsp; Terminal Elearn, Inc.</p>
-      </div>
-      <button class="legal-x" onclick="closeLegalModal('terms')">✕</button>
-    </div>
-    <div class="legal-scroll">
-      <h3>1. Acceptance of Terms</h3>
-      <p>By accessing or using the Terminal Investor platform (the "Service"), you agree to be bound by these Terms &amp; Conditions ("Terms"). These Terms constitute a legally binding agreement between you ("User," "you," or "your") and Terminal Elearn, Inc. ("Company," "we," "us," or "our"). If you do not agree to these Terms, you must not access or use the Service.</p>
-      <p>You represent that you are at least 18 years of age and have the legal capacity to enter into a binding agreement.</p>
-
-      <h3>2. Description of Service</h3>
-      <p>Terminal Investor is a web-based subscription software platform that provides automated stock screening, ETF screening, bond ETF screening, AI-powered fundamental analysis, and PDF report generation. The Service is intended solely for research and educational purposes and does not constitute financial advice or investment management.</p>
-
-      <h3>3. Account Registration and Security</h3>
-      <p>You must register for an account to access the Service. You agree to provide accurate, current, and complete information during registration and to keep your account information up to date. You are responsible for safeguarding your password and for all activities that occur under your account. You must notify us immediately of any unauthorized use at <strong>legal@terminalelearn.com</strong>.</p>
-      <p>You may not share your account credentials, transfer your account to another person, or create accounts using automated means.</p>
-
-      <h3>4. Subscription and Payment</h3>
-      <p>Access to certain features requires a paid subscription. Subscription fees are billed in advance on the applicable billing cycle (monthly or annual) through Stripe, Inc. All fees are non-refundable except as expressly stated in Section 5 below.</p>
-      <p>We reserve the right to change subscription pricing with at least 30 days' notice. Continued use of the Service after a price change constitutes your acceptance of the new pricing.</p>
-      <p>Free trials, where offered, are limited to one per person or entity. We reserve the right to revoke trial access at any time.</p>
-
-      <h3>5. Cancellation and Refund Policy</h3>
-      <p>You may cancel your subscription at any time through your Account &amp; Billing settings. Upon cancellation, your access will continue until the end of the current billing period. We do not provide pro-rated refunds for partial billing periods.</p>
-      <p>We may, at our sole discretion, provide a refund within 7 days of initial purchase if the Service is materially non-functional and we are unable to resolve the issue. Refund requests must be submitted to <strong>legal@terminalelearn.com</strong>.</p>
-
-      <h3>6. Acceptable Use and Prohibited Conduct</h3>
-      <p>You agree not to:</p>
-      <ul>
-        <li>Use the Service for any unlawful purpose or in violation of any applicable law or regulation</li>
-        <li>Redistribute, resell, or commercially exploit screener outputs, reports, or any platform content without our written consent</li>
-        <li>Attempt to reverse-engineer, decompile, or extract source code from the platform</li>
-        <li>Scrape, crawl, or use automated tools to extract data from the platform without authorization</li>
-        <li>Interfere with or disrupt the integrity or performance of the Service or its infrastructure</li>
-        <li>Create multiple accounts to circumvent plan limitations or trial restrictions</li>
-        <li>Upload or transmit malicious code, viruses, or harmful content</li>
-        <li>Impersonate any person or entity or misrepresent your affiliation</li>
-      </ul>
-
-      <h3>7. Intellectual Property Rights</h3>
-      <p>The Service and all of its components — including software, algorithms, UI design, reports, logos, trademarks, and documentation — are the exclusive property of Terminal Elearn, Inc. and are protected by intellectual property laws. You are granted a limited, non-exclusive, non-transferable, revocable license to use the Service for your personal, non-commercial purposes in accordance with these Terms.</p>
-
-      <h3>8. Disclaimer of Warranties</h3>
-      <p>THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, OR UNINTERRUPTED ACCESS. WE DO NOT WARRANT THAT THE SERVICE WILL BE ERROR-FREE, THAT DEFECTS WILL BE CORRECTED, OR THAT THE SERVICE OR THE SERVERS THAT MAKE IT AVAILABLE ARE FREE OF VIRUSES OR OTHER HARMFUL COMPONENTS.</p>
-      <p>WE MAKE NO WARRANTY REGARDING THE ACCURACY, TIMELINESS, OR COMPLETENESS OF ANY FINANCIAL DATA OR AI-GENERATED ANALYSIS. SCREENER OUTPUTS ARE NOT INVESTMENT RECOMMENDATIONS.</p>
-
-      <h3>9. Limitation of Liability</h3>
-      <p>TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL TERMINAL ELEARN, INC., ITS OFFICERS, DIRECTORS, EMPLOYEES, AGENTS, OR LICENSORS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, PUNITIVE, OR EXEMPLARY DAMAGES, INCLUDING LOST PROFITS, INVESTMENT LOSSES, LOSS OF DATA, LOSS OF GOODWILL, OR BUSINESS INTERRUPTION ARISING OUT OF OR IN CONNECTION WITH THESE TERMS OR YOUR USE OF THE SERVICE.</p>
-      <p>Our total cumulative liability to you for any claim arising out of these Terms shall not exceed the greater of (a) the total fees paid by you to us in the three (3) months preceding the claim, or (b) USD $50.00.</p>
-
-      <h3>10. Indemnification</h3>
-      <p>You agree to defend, indemnify, and hold harmless Terminal Elearn, Inc. and its officers, directors, employees, and agents from and against any claims, liabilities, damages, losses, and expenses, including reasonable attorneys' fees, arising out of or in any way connected with: (a) your access to or use of the Service; (b) your violation of these Terms; (c) your violation of any third-party right, including intellectual property or privacy rights; or (d) any investment decisions you make based on information obtained through the Service.</p>
-
-      <h3>11. Governing Law and Dispute Resolution</h3>
-      <p>These Terms shall be governed by the laws of the State of Texas, without regard to conflict of law principles. Any dispute arising from these Terms or the Service shall first be subject to good-faith negotiation. If unresolved within 30 days, disputes shall be submitted to binding arbitration in Travis County, Texas, under the rules of the American Arbitration Association, except that either party may seek injunctive or equitable relief in a court of competent jurisdiction.</p>
-      <p>You waive any right to a jury trial and agree not to participate in a class action lawsuit or class-wide arbitration against the Company.</p>
-
-      <h3>12. Modifications to Terms</h3>
-      <p>We reserve the right to modify these Terms at any time. We will notify you of material changes by posting updated Terms with a new effective date and, where appropriate, by email. Your continued use of the Service after the effective date of changes constitutes acceptance of the revised Terms.</p>
-
-      <h3>13. Termination</h3>
-      <p>We may suspend or terminate your account and access to the Service at any time, with or without notice, for conduct that we believe violates these Terms or is harmful to other users, us, third parties, or for any other reason at our sole discretion. Upon termination, your license to use the Service immediately ceases.</p>
-
-      <h3>14. Entire Agreement</h3>
-      <p>These Terms, together with our Privacy Notice and Legal Notices, constitute the entire agreement between you and Terminal Elearn, Inc. with respect to the Service and supersede all prior agreements, representations, and understandings.</p>
-
-      <h3>15. Contact</h3>
-      <p>Questions about these Terms? Contact us at <strong>legal@terminalelearn.com</strong><br>Terminal Elearn, Inc. &nbsp;·&nbsp; 5900 Balcones Drive, Suite 100, Austin, TX 78731 &nbsp;·&nbsp; +1 (800) 837-6462</p>
-    </div>
-    <div class="legal-ftr">
-      <button class="btn btn-orange" onclick="closeLegalModal('terms')">Close</button>
-    </div>
-  </div>
 </div>
 
 <!-- ══════════════════════════════════════
@@ -1463,7 +1093,7 @@
     <span>Plan:</span>
     <span class="sub-plan" id="sub-plan-display">—</span>
     <span class="badge badge-active" id="sub-plan-status">ACTIVE</span>
-    <span style="color:var(--muted)">Screens today: <strong style="color:var(--text)" id="run-count-display">— / —</strong></span>
+    <span style="color:var(--muted)">Screens today: <strong style="color:var(--text)" id="run-count-display">— / —</strong><span id="run-reset-label" style="font-size:.72rem;color:var(--muted);font-weight:400;margin-left:6px"></span></span>
     <span style="color:var(--muted);font-size:.76rem" id="sub-renew-label"></span>
     <button class="sub-upgrade" id="sub-upgrade-btn" onclick="nav('account')" style="display:none">Upgrade Plan</button>
   </div>
@@ -1916,10 +1546,12 @@
             <div class="section-title" style="margin-top:18px">Change Password</div>
             <div class="card" style="padding:18px 20px">
               <div style="margin-bottom:12px">
-                <label style="display:block;font-size:.82rem;font-weight:600;color:var(--muted);margin-bottom:6px">New Password</label>
+                <label style="display:block;font-size:.82rem;font-weight:600;color:var(--muted);margin-bottom:6px">New Password <small style="color:var(--muted);font-weight:400">(min 12 chars)</small></label>
                 <input type="password" id="settings-pw1" placeholder=""
                   style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;background:var(--surface2);color:var(--text);font-size:.88rem;outline:none;transition:border-color .15s"
-                  onfocus="this.style.borderColor='var(--orange)'" onblur="this.style.borderColor='var(--border)'">
+                  onfocus="this.style.borderColor='var(--orange)'" onblur="this.style.borderColor='var(--border)'"
+                  oninput="updatePasswordStrength('settings-pw1','settings-pw-strength')">
+                <div id="settings-pw-strength" style="margin-top:8px;font-size:.75rem;"></div>
               </div>
               <div style="margin-bottom:18px">
                 <label style="display:block;font-size:.82rem;font-weight:600;color:var(--muted);margin-bottom:6px">Confirm Password</label>
@@ -1971,8 +1603,8 @@
             <div class="section-title" style="margin-top:18px">Session Security</div>
             <div class="card" style="padding:16px 18px">
               <div style="font-size:.78rem;color:var(--muted);line-height:1.9">
-                <div>• Auto sign-out after <strong style="color:var(--text)">15 minutes</strong> of inactivity</div>
-                <div>• Session tokens expire after <strong style="color:var(--text)">115 minutes</strong> of last activity</div>
+                <div>• Auto sign-out after <strong style="color:var(--text)">5 minutes</strong> of inactivity</div>
+                <div>• Session tokens expire after <strong style="color:var(--text)">15 minutes</strong> of last activity</div>
                 <div>• All sessions are encrypted and logged</div>
               </div>
             </div>
@@ -2433,18 +2065,8 @@ function nav(id) {
   // page, not a screen-section. Writing it causes a blank dashboard on next login
   // because sidebarNav('account') has no matching _showScreenSection branch.
 
-  // Lazy-load data when navigating to dashboard.
-  // Also ensure at least one screen section is active — if none is (e.g. user
-  // navigated to Account & Billing first and sidebarNav was never called),
-  // activate the saved section so the content area is never blank.
-  if (id === 'dashboard') {
-    const anyActive = document.querySelector('#page-dashboard .screen-section.active');
-    if (!anyActive) {
-      const sec = _safeSection(localStorage.getItem('ii_sidebar_section') || 'stocks');
-      _showScreenSection(sec);
-    }
-    _loadDashboard();
-  }
+  // Lazy-load data when navigating to dashboard
+  if (id === 'dashboard') _loadDashboard();
   if (id === 'account')   _refreshAccountPage();
 }
 
@@ -2517,22 +2139,27 @@ async function _restoreSession() {
     sessionStorage.removeItem('ii_payment_success');
     window._stripePaymentSuccess = true;
   }
+  // Pick up portal-return flag stored before the clean reload
+  if (sessionStorage.getItem('ii_portal_return') === '1') {
+    sessionStorage.removeItem('ii_portal_return');
+    window._stripePortalReturn = true;
+  }
 
   // Handle email verification redirect params
   const params = new URLSearchParams(window.location.search);
-  if (params.get('portal_return') === '1') {
-    // Stripe Billing Portal redirect back. The browser may have restored a
-    // bfcache snapshot of the previous session instead of re-running JS,
-    // which leaves the content area blank. Strip the param and do ONE hard
-    // reload so the page initialises cleanly from scratch.
-    history.replaceState({}, '', '/');
-    window.location.reload();
-    return;
-  } else if (params.get('payment_success') === '1') {
+  if (params.get('payment_success') === '1') {
     // Store flag in sessionStorage, clear URL, then do ONE clean reload.
     // This eliminates the blank-page flash: the reloaded page starts fresh
     // (no Stripe URL param) and picks up the flag from sessionStorage below.
     sessionStorage.setItem('ii_payment_success', '1');
+    history.replaceState({}, '', '/');
+    window.location.reload();
+    return;
+  } else if (params.get('portal_return') === '1') {
+    // Stripe Customer Portal return — same clean-reload pattern as payment_success.
+    // After the reload the sessionStorage flag is picked up above and the user
+    // lands on the Stock Screener with an updated-billing toast.
+    sessionStorage.setItem('ii_portal_return', '1');
     history.replaceState({}, '', '/');
     window.location.reload();
     return;
@@ -2576,18 +2203,22 @@ async function _restoreSession() {
       window._stripePaymentSuccess = false;
       nav('dashboard');
       sidebarNav('stocks');
-      setTimeout(() => showToast('Payment successful — your plan is now active!', 'success'), 500);
+      setTimeout(() => showToast('🎉 Payment successful — your plan is now active!', 'success'), 500);
+      return;
+    }
+
+    // Stripe Customer Portal return: land on Stock Screener with billing toast
+    if (window._stripePortalReturn) {
+      window._stripePortalReturn = false;
+      nav('dashboard');
+      sidebarNav('stocks');
+      setTimeout(() => showToast('Billing settings updated — your plan is now active!', 'success'), 500);
       return;
     }
 
     const savedView    = localStorage.getItem('ii_active_view') || 'dashboard';
     const savedSection = _safeSection(localStorage.getItem('ii_sidebar_section') || 'stocks');
     if (savedView === 'account') {
-      // Prime the active screen section so that the Dashboard page is fully
-      // rendered when the user clicks the Dashboard tab after viewing billing.
-      // We call _showScreenSection directly (not sidebarNav) to avoid
-      // overwriting the 'account' value in localStorage.
-      _showScreenSection(savedSection);
       nav('account');
     } else {
       nav(savedView);
@@ -2785,11 +2416,13 @@ function _showVerifyWall(userData) {
   if (linkWrap) linkWrap.style.display = 'none';
 
   nav('verify');
-  // No auto-resend here. Calling /auth/resend-verification from this function
-  // fires on EVERY page load / session restore for any unverified user, which
-  // generates a new token each time (invalidating the previous link) and sends
-  // duplicate emails. The user has a "Resend Verification Email" button on the
-  // wall. Registration passes verify_url in the response for SMTP-off dev mode.
+
+  // Auto-request a verify URL (handles SMTP-not-configured case)
+  _api('POST', '/auth/resend-verification').then(rv => {
+    if (rv.ok && rv.data?.verify_url) {
+      _showVerifyWallLink(rv.data.verify_url);
+    }
+  });
 }
 
 async function _resendVerificationWall() {
@@ -2817,34 +2450,6 @@ function _showVerifyWallLink(url) {
     wrap.style.display = '';
   }
 }
-
-// ── Legal / Privacy / T&C Modals ───────────────────────────────────
-function openLegalModal(which) {
-  const el = document.getElementById('legal-overlay-' + which);
-  if (el) el.classList.add('open');
-  document.body.style.overflow = 'hidden';
-}
-function closeLegalModal(which) {
-  const el = document.getElementById('legal-overlay-' + which);
-  if (el) el.classList.remove('open');
-  // Only restore scroll if no other modal is open
-  const anyOpen = document.querySelector('.legal-overlay.open') || document.querySelector('.modal-overlay.open');
-  if (!anyOpen) document.body.style.overflow = '';
-}
-// Close legal overlays on Escape key
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') {
-    document.querySelectorAll('.legal-overlay.open').forEach(el => {
-      const id = el.id.replace('legal-overlay-', '');
-      closeLegalModal(id);
-    });
-  }
-});
-// Set footer copyright year dynamically
-(function() {
-  const el = document.getElementById('footer-year');
-  if (el) el.textContent = new Date().getFullYear();
-})();
 
 // ── Auth Modal ─────────────────────────────────────────────────────
 function showAuthModal(tab) {
@@ -3046,84 +2651,26 @@ function updatePasswordStrength(inputId, strengthId) {
   strengthEl.innerHTML = `<span style="color: ${level.color};">${level.label}${tips}</span>`;
 }
 
-// ── REGISTER — field-level validation helpers ───────────────────────
-const _REG_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-
-function _setRegFieldError(inputId, msg) {
-  const inp = document.getElementById(inputId);
-  const err = document.getElementById(inputId + '-error');
-  if (inp) inp.classList.add('input-error');
-  if (err) { err.textContent = msg; err.classList.add('visible'); }
-}
-
-function _clearRegField(inputId) {
-  const inp = document.getElementById(inputId);
-  const err = document.getElementById(inputId + '-error');
-  if (inp) inp.classList.remove('input-error');
-  if (err) { err.textContent = ''; err.classList.remove('visible'); }
-}
-
-function _blurValidateRegEmail() {
-  const val = (document.getElementById('r-email').value || '').trim();
-  if (val && !_REG_EMAIL_RE.test(val)) {
-    _setRegFieldError('r-email', '✗ Please enter a valid email address (e.g. you@example.com)');
-  }
-}
-
 // ── REGISTER — real POST /auth/register ────────────────────────────
 async function doRegister() {
   const name  = (document.getElementById('r-name').value  || '').trim();
   const email = (document.getElementById('r-email').value || '').trim();
   const pwd   =  document.getElementById('r-pwd').value   || '';
-  const disclaimer    = document.getElementById('r-disclaimer');
+  const disclaimer = document.getElementById('r-disclaimer');
   const disclaimerError = document.getElementById('r-disclaimer-error');
 
-  // ── Clear previous field errors ──────────────────────────────────
-  ['r-name', 'r-email', 'r-pwd'].forEach(_clearRegField);
-  if (disclaimerError) disclaimerError.style.display = 'none';
+  if (!name || !email || !pwd) { showToast('Please fill in all fields', 'error'); return; }
+  if (pwd.length < 12)          { showToast('Password must be at least 12 characters', 'error'); return; }
 
-  let hasError = false;
-
-  // Full name
-  if (!name) {
-    _setRegFieldError('r-name', '✗ Full name is required');
-    hasError = true;
-  } else if (name.length < 2) {
-    _setRegFieldError('r-name', '✗ Name must be at least 2 characters');
-    hasError = true;
-  } else if (name.length > 100) {
-    _setRegFieldError('r-name', '✗ Name must be 100 characters or fewer');
-    hasError = true;
-  } else if (!/^[\p{L}\p{M}'\-\.\s]+$/u.test(name)) {
-    _setRegFieldError('r-name', '✗ Name may only contain letters, spaces, hyphens and apostrophes');
-    hasError = true;
-  }
-
-  // Email
-  if (!email) {
-    _setRegFieldError('r-email', '✗ Email address is required');
-    hasError = true;
-  } else if (!_REG_EMAIL_RE.test(email)) {
-    _setRegFieldError('r-email', '✗ Please enter a valid email address (e.g. you@example.com)');
-    hasError = true;
-  }
-
-  // Password
-  if (!pwd) {
-    _setRegFieldError('r-pwd', '✗ Password is required');
-    hasError = true;
-  } else if (pwd.length < 12) {
-    _setRegFieldError('r-pwd', `✗ Password must be at least 12 characters (currently ${pwd.length})`);
-    hasError = true;
-  }
-
-  // Disclaimer
+  // Check if disclaimer is checked
   if (!disclaimer || !disclaimer.checked) {
     if (disclaimerError) disclaimerError.style.display = 'block';
-    hasError = true;
+    showToast('Please agree to the disclaimer to create an account', 'error');
+    return;
   }
 
-  if (hasError) return;
+  // Clear error message if checkbox is now checked
+  if (disclaimerError) disclaimerError.style.display = 'none';
 
   const btn = document.querySelector('#auth-pane-register .submit-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Creating account…'; }
@@ -3134,19 +2681,8 @@ async function doRegister() {
   if (btn) { btn.disabled = false; btn.textContent = 'Start Free Trial →'; }
 
   if (!ok) {
-    if (status === 409) {
-      // Email already in use — show inline on the email field
-      _setRegFieldError('r-email', '✗ An account with this email already exists. Try signing in instead.');
-    } else if (data.fields) {
-      // Server returned per-field validation errors
-      Object.entries(data.fields).forEach(([field, msg]) => {
-        const id = field === 'email' ? 'r-email' : field === 'password' ? 'r-pwd' : field === 'full_name' ? 'r-name' : null;
-        if (id) _setRegFieldError(id, `✗ ${msg}`);
-        else showToast(`${msg}`, 'error');
-      });
-    } else {
-      showToast(data.error || 'Registration failed. Please try again.', 'error');
-    }
+    const msg = data.error || (status === 409 ? 'An account with that email already exists.' : 'Registration failed. Please try again.');
+    showToast(msg, 'error');
     return;
   }
 
@@ -3159,18 +2695,19 @@ async function doRegister() {
     setLoggedIn(true, me.data, me.data.subscription);
     _applyPlanGating(me.data.subscription, me.data.features);
 
-    // New accounts are never verified yet — show the wall immediately.
+    // New accounts are never verified yet — show the wall immediately
     _showVerifyWall(me.data);
 
-    // If SMTP is not configured the server returns the verify URL directly
+    // If SMTP is not configured the server returns the verify URL directly —
+    // _showVerifyWall already auto-requests it, but honour the register response too
     if (data.verify_url) {
       setTimeout(() => _showVerifyWallLink(data.verify_url), 600);
     }
-    showToast('Account created! Check your inbox to verify your email.', 'success');
+    showToast('🎉 Account created! Check your inbox to verify your email.', 'success');
   } else {
     setLoggedIn(true, { user_id: data.user_id, email: data.email }, null);
     nav('dashboard');
-    showToast('Account created! Check your email to verify your address.', 'success');
+    showToast('🎉 Account created! Check your email to verify your address.', 'success');
   }
 }
 
@@ -3192,7 +2729,7 @@ async function doForgotPassword() {
     return;
   }
 
-  showToast('Reset link sent to your email. Check your inbox!', 'success');
+  showToast('✓ Reset link sent to your email. Check your inbox!', 'success');
   document.getElementById('forgot-email').value = '';
 
   // After 3 seconds, switch back to signin
@@ -3229,7 +2766,7 @@ async function doResetPassword() {
     return;
   }
 
-  showToast('Password updated successfully! You can now sign in.', 'success');
+  showToast('✓ Password updated successfully! You can now sign in.', 'success');
   document.getElementById('reset-pwd1').value = '';
   document.getElementById('reset-pwd2').value = '';
 
@@ -3290,31 +2827,16 @@ async function _proceedWithLogout() {
   _api('POST', '/auth/logout').catch(() => {});
 }
 
-// ── SESSION INACTIVITY TIMEOUT (115 minutes) ───────────────────────
-// 15 min matches trading-platform standards (Schwab, Fidelity, IBKR).
-// A 1-minute warning toast gives the user a chance to stay signed in.
-const SESSION_INACTIVITY_MS   = 15 * 60 * 1000; // 115 minutes
-const SESSION_INACTIVITY_WARN =  14 * 60 * 1000; // warn at 14 minutes
-let _inactivityTimer     = null;
-let _inactivityWarnTimer = null;
-let _lastActivityTime    = Date.now();
+// ── SESSION INACTIVITY TIMEOUT (5 minutes) ────────────────────────
+const SESSION_INACTIVITY_MS = 5 * 60 * 1000; // 5 minutes
+let _inactivityTimer = null;
+let _lastActivityTime = Date.now();
 
 function _resetInactivityTimer() {
   if (!_currentUser) return; // Only track if logged in
   _lastActivityTime = Date.now();
 
-  if (_inactivityTimer)     clearTimeout(_inactivityTimer);
-  if (_inactivityWarnTimer) clearTimeout(_inactivityWarnTimer);
-
-  // 1-minute warning before logout
-  _inactivityWarnTimer = setTimeout(() => {
-    if (!_currentUser) return;
-    const anyRunActive = _isRunning === true || _etf_state?.running === true || _bond_state?.running === true;
-    if (!anyRunActive) {
-      showToast('Session expires in 1 minute due to inactivity — move your mouse to stay signed in.', 'warning');
-    }
-  }, SESSION_INACTIVITY_WARN);
-
+  if (_inactivityTimer) clearTimeout(_inactivityTimer);
   _inactivityTimer = setTimeout(() => {
     if (_currentUser) {
       // Check if any screenings are active — don't logout during a run
@@ -3325,7 +2847,7 @@ function _resetInactivityTimer() {
         return;
       }
       // No active runs — proceed with inactivity logout
-      showToast('Session expired due to inactivity. Please sign in again.', 'warning');
+      showToast('⏱️ Session expired due to inactivity. Please sign in again.', 'warning');
       _forceLogout();
     }
   }, SESSION_INACTIVITY_MS);
@@ -3352,10 +2874,8 @@ function _startActivityTracking() {
 
 // Stop tracking when user logs out
 function _stopActivityTracking() {
-  if (_inactivityTimer)     clearTimeout(_inactivityTimer);
-  if (_inactivityWarnTimer) clearTimeout(_inactivityWarnTimer);
-  _inactivityTimer     = null;
-  _inactivityWarnTimer = null;
+  if (_inactivityTimer) clearTimeout(_inactivityTimer);
+  _inactivityTimer = null;
 }
 
 // ── Admin Panel ────────────────────────────────────────────────────
@@ -3738,6 +3258,8 @@ async function _loadDashboard() {
 
   const runCountDisplay = document.getElementById('run-count-display');
   if (runCountDisplay) runCountDisplay.textContent = runCount + ' / ' + runLimit;
+  const resetLblDash = document.getElementById('run-reset-label');
+  if (resetLblDash) resetLblDash.textContent = pi.resets_at ? '· Resets at ' + pi.resets_at : '';
 
   // Report count KPI
   const kpiReports = document.getElementById('kpi-report-count');
@@ -3804,9 +3326,15 @@ async function _loadDashboard() {
     const ds = data.duration_secs;
     statDur.textContent = ds >= 60 ? Math.floor(ds/60) + 'm ' + (ds%60) + 's' : ds + 's';
   }
-  // Show the stocks stats bar only when there is real data to display
+  // Show the stocks stats bar only when there is real data AND no run is in progress
   const _sBar = document.getElementById('stock-stats-bar');
-  if (_sBar && (summary.universe || data.duration_secs != null)) _sBar.style.display = '';
+  if (_sBar) {
+    if (!_isRunning && (summary.universe || data.duration_secs != null)) {
+      _sBar.style.display = '';
+    } else if (_isRunning) {
+      _sBar.style.display = 'none';
+    }
+  }
 
   // ── Picks wrap — only render when not actively running ────
   if (!_isRunning) renderPicks(data.last_picks || [], data.snap_picks || []);
@@ -4054,8 +3582,6 @@ async function choosePlan(planName) {
 }
 
 function contactSales() {
-  // Pre-fill email if user is already logged in
-  const prefillEmail = (window._user && window._user.email) ? window._user.email : '';
   showModal(
     'Enterprise Sales',
     `<p style="margin-bottom:16px">Our team will set up a personalised demo and quote for your organisation.</p>
@@ -4063,22 +3589,19 @@ function contactSales() {
      <input type="text" class="modal-select" id="sales-name" placeholder="">
      <label class="modal-label">Company / Fund name</label>
      <input type="text" class="modal-select" id="sales-company" placeholder="Acme Capital">
-     <label class="modal-label">Your email</label>
-     <input type="email" class="modal-select" id="sales-email" placeholder="you@company.com" value="${prefillEmail}">
      <label class="modal-label">Message</label>
      <textarea class="modal-select" id="sales-msg" rows="3" style="resize:vertical" placeholder="Tell us about your use case…"></textarea>`,
     [
       { label: 'Send Inquiry', cls: 'btn-orange', action: async () => {
           const name    = (document.getElementById('sales-name')?.value || '').trim();
           const company = (document.getElementById('sales-company')?.value || '').trim();
-          const email   = (document.getElementById('sales-email')?.value || '').trim();
           const message = (document.getElementById('sales-msg')?.value || '').trim();
           if (!name || !message) {
             showToast('Please fill in your name and message.', 'error');
             return;
           }
           closeModal();
-          const { ok, data } = await _api('POST', '/billing/enterprise-inquiry', { name, company, email, message });
+          const { ok, data } = await _api('POST', '/billing/enterprise-inquiry', { name, company, message });
           if (ok) {
             showToast('Inquiry sent! Our team will contact you within 24h.', 'success');
           } else {
@@ -4287,11 +3810,62 @@ function generateAnalysisHTML(pick, accent) {
     </div>
   `;
 
-    // Detailed Graham N-criteria and Buffett N-criteria checklist sections
-    // were intentionally removed from the Stock screen detail view per product
-    // direction — the 13-criterion scoring still drives the picks, and the
-    // aggregate Graham / Buffett scores are surfaced in the Scores Breakdown
-    // section below, but the per-row criterion list is no longer displayed.
+    const grahamCriteria = pick.checklist || [];
+    const buffettCriteria = pick.buffett_checklist || [];
+
+  // ── Graham 8-Criteria Section ──────────────────────────────────────────────
+  if (grahamCriteria.length > 0) {
+    const gRows = grahamCriteria.map(c => {
+      const st = (c.status || '').toUpperCase();
+      const tagBg    = st === 'PASS' ? '#1a7f37'      : st === 'COND' ? '#9a6700'      : '#b91c1c';
+      const tagColor = '#ffffff';
+      const rowBg    = st === 'PASS' ? 'rgba(63,185,80,0.08)'   : st === 'COND' ? 'rgba(210,153,34,0.1)'   : 'rgba(248,81,73,0.08)';
+      const rowBdr   = st === 'PASS' ? 'rgba(63,185,80,0.25)'   : st === 'COND' ? 'rgba(210,153,34,0.3)'   : 'rgba(248,81,73,0.25)';
+      return `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:${rowBg};border:1px solid ${rowBdr};border-radius:8px;">
+          <div style="min-width:0;flex:1;">
+            <div style="font-size:0.78rem;font-weight:700;color:var(--text);line-height:1.3;">${c.criterion || ''}</div>
+            <div style="font-size:0.71rem;color:var(--muted);margin-top:3px;line-height:1.4;">${c.detail || ''}</div>
+          </div>
+          <span style="flex-shrink:0;display:inline-block;padding:3px 9px;border-radius:5px;font-size:0.68rem;font-weight:800;letter-spacing:0.6px;text-transform:uppercase;background:${tagBg};color:${tagColor};">${st === 'COND' ? 'COND' : st}</span>
+        </div>`;
+    }).join('');
+    html += `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:28px;margin-top:28px;">
+      <div style="font-size:0.75rem;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:20px;">Graham 8-Criteria</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        ${gRows}
+      </div>
+    </div>
+  `;
+  }
+
+  // ── Buffett 5-Criteria Section ─────────────────────────────────────────────
+  if (buffettCriteria.length > 0) {
+    const bRows = buffettCriteria.map(c => {
+      const st = (c.status || '').toUpperCase();
+      const tagBg    = st === 'PASS' ? '#1a7f37'      : st === 'COND' ? '#9a6700'      : '#b91c1c';
+      const tagColor = '#ffffff';
+      const rowBg    = st === 'PASS' ? 'rgba(63,185,80,0.08)'   : st === 'COND' ? 'rgba(210,153,34,0.1)'   : 'rgba(248,81,73,0.08)';
+      const rowBdr   = st === 'PASS' ? 'rgba(63,185,80,0.25)'   : st === 'COND' ? 'rgba(210,153,34,0.3)'   : 'rgba(248,81,73,0.25)';
+      return `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:${rowBg};border:1px solid ${rowBdr};border-radius:8px;">
+          <div style="min-width:0;flex:1;">
+            <div style="font-size:0.78rem;font-weight:700;color:var(--text);line-height:1.3;">${c.criterion || ''}</div>
+            <div style="font-size:0.71rem;color:var(--muted);margin-top:3px;line-height:1.4;">${c.detail || ''}</div>
+          </div>
+          <span style="flex-shrink:0;display:inline-block;padding:3px 9px;border-radius:5px;font-size:0.68rem;font-weight:800;letter-spacing:0.6px;text-transform:uppercase;background:${tagBg};color:${tagColor};">${st === 'COND' ? 'COND' : st}</span>
+        </div>`;
+    }).join('');
+    html += `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:28px;margin-top:16px;">
+      <div style="font-size:0.75rem;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:20px;">Buffett 5-Criteria</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        ${bRows}
+      </div>
+    </div>
+  `;
+  }
 
   // Scores Breakdown Section
   html += `
@@ -4801,7 +4375,7 @@ function _applyEmailPlanGate(emailAllowed) {
   }
 }
 
-function updateEmailReportDependency(skipSave = false) {
+function updateEmailReportDependency(skipSave = false, suppressToast = false) {
   const pdfCheckbox = document.getElementById('cfg-pdf');
   const emailCheckbox = document.getElementById('cfg-email');
   const emailToggleLabel = emailCheckbox?.closest('.tgl-switch');
@@ -4828,7 +4402,7 @@ function updateEmailReportDependency(skipSave = false) {
       emailToggleRow.style.opacity = '1';
     }
   } else {
-    // PDF is OFF - disable and uncheck email report
+    // PDF is OFF — disable and uncheck email report in Agent Configuration panel
     emailCheckbox.checked = false;
     emailCheckbox.disabled = true;
     if (emailToggleLabel) {
@@ -4839,10 +4413,17 @@ function updateEmailReportDependency(skipSave = false) {
     if (emailToggleRow) {
       emailToggleRow.style.opacity = '0.6';
     }
+    // Also turn OFF the Reports tab email-enabled-toggle
+    const emailDeliveryToggle = document.getElementById('email-enabled-toggle');
+    if (emailDeliveryToggle) emailDeliveryToggle.checked = false;
   }
 
-  // Save config after toggling (unless loading config during init)
-  if (!skipSave) saveConfig();
+  // Save config after toggling (unless loading config during init).
+  // Use immediate=true when PDF is OFF so the backend is flushed before the
+  // user can navigate to the Reports tab (bypasses the 400ms debounce).
+  // Pass suppressToast so programmatic callers (e.g. saveEmailConfig) can
+  // prevent a double notification when they already showed their own toast.
+  if (!skipSave) saveConfig(!pdfCheckbox.checked, !suppressToast);
 }
 
 function toggleMarket(m) {
@@ -4858,9 +4439,9 @@ function toggleMarket(m) {
   saveConfig();
 }
 
-async function saveConfig() {
+async function saveConfig(immediate = false, notify = true) {
   clearTimeout(_cfgSaveTimer);
-  _cfgSaveTimer = setTimeout(async () => {
+  const _doSave = async () => {
     try {
       const period    = document.querySelector('input[name="cfg-period"]:checked')?.value || 'daily100';
       const geo       = document.querySelector('input[name="cfg-geo"]:checked')?.value    || 'all';
@@ -4877,21 +4458,16 @@ async function saveConfig() {
       // ── Sync to Email Delivery tab toggle immediately (no page refresh needed) ──
       const emailDeliveryToggle = document.getElementById('email-enabled-toggle');
       if (emailDeliveryToggle) emailDeliveryToggle.checked = emailEnabled;
-      // Only show toast if not loading config during initialization
-      if (!_isLoadingConfig) {
-        const container = document.getElementById('toast-container-stock');
-        if (container) {
-          container.innerHTML = '';
-          const toast = document.createElement('div');
-          toast.className = 'toast success';
-          toast.innerHTML = '✅&nbsp;&nbsp;&nbsp;Settings saved';
-          container.appendChild(toast);
-          toast.style.animation = 'slideIn .25s ease';
-          setTimeout(() => toast.remove(), 3000);
-        }
-      }
+      // Show success toast only when triggered by a user action (not during
+      // initialisation or programmatic/dependency-driven saves)
+      if (notify && !_isLoadingConfig) showToast('Settings saved', 'success');
     } catch(e) { console.error('saveConfig error', e); }
-  }, 400);
+  };
+  if (immediate) {
+    _doSave();   // fire now — bypasses debounce for dependency-driven saves
+  } else {
+    _cfgSaveTimer = setTimeout(_doSave, 400);
+  }
 }
 
 // ── Apply plan gating to stock config options ──────────────────────
@@ -5029,6 +4605,17 @@ function _lockAgentConfig() {
     radio.parentElement.style.cursor = 'not-allowed';
   });
 
+  // Lock Email Delivery screen (Reports tab) — same toggle, different view
+  const emailDeliveryToggle = document.getElementById('email-enabled-toggle');
+  const emailDeliveryAddr   = document.getElementById('email-delivery-addr');
+  const emailDeliverySave   = document.querySelector('#email-config-panel .btn-orange');
+  if (emailDeliveryToggle) {
+    emailDeliveryToggle.disabled = true;
+    const parent = emailDeliveryToggle.closest('.tgl-switch');
+    if (parent) { parent.style.opacity = '0.5'; parent.style.cursor = 'not-allowed'; parent.style.pointerEvents = 'none'; }
+  }
+  if (emailDeliveryAddr) { emailDeliveryAddr.disabled = true; emailDeliveryAddr.style.opacity = '0.5'; emailDeliveryAddr.style.cursor = 'not-allowed'; }
+  if (emailDeliverySave) { emailDeliverySave.disabled = true; emailDeliverySave.style.opacity = '0.5'; emailDeliverySave.style.cursor = 'not-allowed'; }
 }
 
 function _unlockAgentConfig() {
@@ -5082,6 +4669,17 @@ function _unlockAgentConfig() {
     }
   });
 
+  // Unlock Email Delivery screen (Reports tab)
+  const emailDeliveryToggle = document.getElementById('email-enabled-toggle');
+  const emailDeliveryAddr   = document.getElementById('email-delivery-addr');
+  const emailDeliverySave   = document.querySelector('#email-config-panel .btn-orange');
+  if (emailDeliveryToggle) {
+    emailDeliveryToggle.disabled = false;
+    const parent = emailDeliveryToggle.closest('.tgl-switch');
+    if (parent) { parent.style.opacity = '1'; parent.style.cursor = 'pointer'; parent.style.pointerEvents = 'auto'; }
+  }
+  if (emailDeliveryAddr) { emailDeliveryAddr.disabled = false; emailDeliveryAddr.style.opacity = '1'; emailDeliveryAddr.style.cursor = ''; }
+  if (emailDeliverySave) { emailDeliverySave.disabled = false; emailDeliverySave.style.opacity = '1'; emailDeliverySave.style.cursor = 'pointer'; }
 }
 
 // ── Helper: Handle daily run limit errors ───────────────────────────
@@ -5367,13 +4965,19 @@ async function _refreshRunCount() {
   try {
     const { ok, data } = await _api('GET', '/api/status');
     if (!ok || !data?.plan_info) return;
-    const pi       = data.plan_info;
-    const runCount = pi.runs_today ?? 0;
-    const rawLimit = pi.runs_limit ?? pi.runs_per_day;
-    const runLimit = (rawLimit === null || rawLimit === undefined) ? 'Unlimited' : rawLimit;
-    // Header banner
+    const pi        = data.plan_info;
+    const runCount  = pi.runs_today ?? 0;
+    const rawLimit  = pi.runs_limit ?? pi.runs_per_day;
+    const runLimit  = (rawLimit === null || rawLimit === undefined) ? 'Unlimited' : rawLimit;
+    const resetsAt  = pi.resets_at || null;   // e.g. "12:00 AM EDT"
+
+    // Header banner counter
     const hdr = document.getElementById('run-count-display');
     if (hdr) hdr.textContent = runCount + ' / ' + runLimit;
+    // Header banner reset label (shown inline after the count)
+    const resetLbl = document.getElementById('run-reset-label');
+    if (resetLbl) resetLbl.textContent = resetsAt ? '· Resets at ' + resetsAt : '';
+
     // Dashboard KPI card
     const kpiRuns = document.getElementById('kpi-runs');
     if (kpiRuns) kpiRuns.innerHTML = runCount + ' <span style="font-size:.95rem;color:var(--muted)">/ ' + runLimit + '</span>';
@@ -5386,7 +4990,10 @@ async function _refreshRunCount() {
     }
     // Account page (only update if it exists and is populated)
     const acct = document.getElementById('acct-screens-used');
-    if (acct && acct.textContent !== '— / —') acct.textContent = runCount + ' / ' + runLimit + ' used today';
+    if (acct && acct.textContent !== '— / —') {
+      acct.textContent = runCount + ' / ' + runLimit + ' used today'
+                       + (resetsAt ? ' · Resets at ' + resetsAt : '');
+    }
   } catch (_e) { /* silently fail — non-critical UI refresh */ }
 }
 
@@ -6688,13 +6295,15 @@ async function saveSettingsPassword() {
   const pw1 = document.getElementById('settings-pw1')?.value || '';
   const pw2 = document.getElementById('settings-pw2')?.value || '';
   if (!pw1) { showToast('Enter a new password', 'warning'); return; }
+  if (pw1.length < 12) { showToast('Password must be at least 12 characters', 'error'); return; }
   if (pw1 !== pw2) { showToast('Passwords do not match', 'error'); return; }
-  if (pw1.length < 8) { showToast('Password must be at least 8 characters', 'error'); return; }
   const { ok, data } = await _api('POST', '/auth/profile', { password: pw1 });
   if (ok) {
     document.getElementById('settings-pw1').value = '';
     document.getElementById('settings-pw2').value = '';
-    showToast('Password changed successfully', 'success');
+    const strengthEl = document.getElementById('settings-pw-strength');
+    if (strengthEl) strengthEl.textContent = '';
+    showToast('Password changed — a confirmation email has been sent', 'success');
   } else {
     showToast(data?.error || 'Could not change password', 'error');
   }
@@ -6722,10 +6331,8 @@ async function saveSchedule() {
     return;
   }
 
-  // Use explicit empty-string check instead of || so that hour=0 (midnight)
-  // is never treated as falsy and silently replaced by the default of 18.
-  const hour = hourEl.value !== '' ? parseInt(hourEl.value, 10) : parseInt(hourEl.placeholder || 18, 10);
-  const min  = minEl.value  !== '' ? parseInt(minEl.value,  10) : parseInt(minEl.placeholder  || 0,  10);
+  const hour = parseInt(hourEl.value) || parseInt(hourEl.placeholder || 18);
+  const min = parseInt(minEl.value) || parseInt(minEl.placeholder || 0);
   const enabled = toggleBtn?.classList.contains('on') ?? true;
 
   if (isNaN(hour) || hour < 0 || hour > 23) { showToast('Enter a valid hour (0–23)', 'error'); return; }
@@ -6771,18 +6378,39 @@ function _showEmailScreen() {
   } else {
     locked.style.display = 'none';
     config.style.display = '';
-    // Pre-populate fields from stored config
+    // Pre-populate fields.
+    // For the toggle, use cfg-email (the Agent Config panel checkbox) as the
+    // real-time source of truth — it is updated synchronously whenever PDF or
+    // email state changes, so it is always ahead of any async API response.
+    const cfgEmailNow = document.getElementById('cfg-email');
+    const toggleNow   = document.getElementById('email-enabled-toggle');
+    if (toggleNow && cfgEmailNow) toggleNow.checked = cfgEmailNow.checked;
+    // Fetch the delivery address from the backend (not held anywhere else in-page)
     _api('GET', '/api/config').then(({ ok, data }) => {
       if (!ok) return;
-      const toggle = document.getElementById('email-enabled-toggle');
-      const addr   = document.getElementById('email-delivery-addr');
-      if (toggle) toggle.checked = !!data.email_enabled;
+      const addr = document.getElementById('email-delivery-addr');
       if (addr && data.email_address) addr.value = data.email_address;
+      // Re-apply the toggle from the live cfg-email state (guards against the
+      // GET returning a stale email_enabled value while a save is in-flight)
+      const toggle    = document.getElementById('email-enabled-toggle');
+      const cfgEmail  = document.getElementById('cfg-email');
+      if (toggle && cfgEmail) toggle.checked = cfgEmail.checked;
     });
   }
 }
 
 async function saveEmailConfig() {
+  // Block any config changes while a stock screener run is active
+  if (_isRunning) {
+    showToast('Cannot change email settings while a screen is running', 'warning', 3500);
+    // Revert the toggle back to its last saved state
+    _api('GET', '/api/config').then(({ ok, data }) => {
+      const toggleEl = document.getElementById('email-enabled-toggle');
+      if (ok && toggleEl) toggleEl.checked = !!data.email_enabled;
+    });
+    return;
+  }
+
   const toggleEl = document.getElementById('email-enabled-toggle');
   const addrEl   = document.getElementById('email-delivery-addr');
 
@@ -6807,11 +6435,20 @@ async function saveEmailConfig() {
   const { ok, data } = await _api('POST', '/api/config', { email_enabled: enabled, email_address: addr });
   if (ok) {
     showToast('Email settings saved successfully', 'success');
-    // ── Sync to Screener config panel immediately (no page refresh needed) ──
+    // ── Sync to Agent Configuration panel immediately (no page refresh needed) ──
     const cfgEmailEl = document.getElementById('cfg-email');
-    if (cfgEmailEl) {
-      cfgEmailEl.checked = enabled;
-      updateEmailReportDependency(true); // re-apply PDF dependency without auto-save
+    const cfgPdfEl   = document.getElementById('cfg-pdf');
+    if (enabled) {
+      // Turning ON email delivery → ensure both PDF Generation AND Email Report are ON
+      if (cfgPdfEl   && !cfgPdfEl.checked)   cfgPdfEl.checked   = true;
+      if (cfgEmailEl && !cfgEmailEl.checked)  cfgEmailEl.checked = true;
+      // suppressToast=true — saveEmailConfig already showed its own toast above
+      updateEmailReportDependency(false, true);
+    } else {
+      // Turning OFF — just sync the email checkbox and re-apply the dependency
+      if (cfgEmailEl) cfgEmailEl.checked = false;
+      // suppressToast=true — saveEmailConfig already showed its own toast above
+      updateEmailReportDependency(false, true);
     }
   } else {
     showToast(data?.message || 'Could not save email settings', 'error');
@@ -6841,8 +6478,8 @@ async function _openSettingsModal() {
 
       <div style="padding-top:14px;border-top:1px solid var(--border);font-size:.8rem;color:var(--muted);line-height:1.6">
         <div style="margin-bottom:10px"><strong>Session Security:</strong></div>
-        <div>• Automatic sign-out after <strong>15 minutes of inactivity</strong></div>
-        <div>• Session tokens expire after <strong>115 minutes</strong> of last activity</div>
+        <div>• Automatic sign-out after <strong>5 minutes of inactivity</strong></div>
+        <div>• Session tokens expire after <strong>15 minutes</strong> of last activity</div>
         <div>• All sessions are encrypted and logged</div>
       </div>
     </div>
@@ -7024,7 +6661,7 @@ function _badgeHtml(status) {
 _restoreSession();
 
 // NOTE: No beforeunload auto-logout — page refresh would incorrectly sign users out.
-// Access tokens expire naturally after 115 minutes; the refresh token handles re-auth.
+// Access tokens expire naturally after 15 minutes; the refresh token handles re-auth.
 </script>
 </body>
 </html>

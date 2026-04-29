@@ -639,11 +639,69 @@ def _send_verification_email(to_email: str, verify_token: str) -> str:
     return verify_url
 
 
+def _notify_password_changed(to_email: str) -> None:
+    """
+    Send a security-notification email when a user changes their password
+    from the Settings screen.  Fires asynchronously so it never blocks the
+    HTTP response.
+    """
+    from zoneinfo import ZoneInfo
+    _TZ_EST    = ZoneInfo("America/New_York")
+    now_est    = datetime.now(_TZ_EST)
+    tz_label   = "EDT" if now_est.dst() else "EST"
+    changed_at = now_est.strftime(f"%B %d, %Y at %H:%M {tz_label}")
+
+    html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#0d1117;color:#e6edf3;border-radius:12px;overflow:hidden">
+      <div style="background:#f0a500;padding:24px 32px;text-align:center">
+        <h1 style="margin:0;font-size:2rem;color:#0d1117">🅣 Terminal Investor</h1>
+      </div>
+      <div style="padding:32px">
+        <h2 style="margin-top:0;font-size:1.1rem">Your password was changed</h2>
+        <p style="color:#8b949e;line-height:1.6">
+          Your Terminal Investor password was successfully updated on
+          <strong style="color:#e6edf3">{changed_at}</strong>.
+        </p>
+        <p style="color:#8b949e;line-height:1.6">
+          If you made this change, no action is needed.
+        </p>
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px 20px;margin:24px 0">
+          <p style="margin:0;color:#f85149;font-weight:600;font-size:.9rem">
+            ⚠️ If you did NOT make this change
+          </p>
+          <p style="margin:8px 0 0;color:#8b949e;font-size:.85rem;line-height:1.55">
+            Your account may be compromised. Reset your password immediately using
+            the <strong style="color:#e6edf3">Forgot Password</strong> link on the sign-in page,
+            then contact support.
+          </p>
+        </div>
+        <hr style="border:none;border-top:1px solid #30363d;margin:24px 0">
+        <p style="color:#6e7681;font-size:.75rem">
+          This is an automated security notification from Terminal Investor.
+          Please do not reply to this email.
+        </p>
+      </div>
+    </div>
+    """
+    threading.Thread(
+        target=_send_email,
+        args=(to_email, "Your Terminal Investor password was changed", html),
+        daemon=True,
+    ).start()
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# Strict RFC-5321 email regex — only alphanumerics + . _ % + - in local part.
+# Explicitly rejects HTML/script characters (<>{}|) to block stored-XSS via email field.
+_EMAIL_RE = re.compile(
+    r"^[a-zA-Z0-9._%+\-]{1,64}"   # local part: safe chars only, max 64
+    r"@"
+    r"[a-zA-Z0-9.\-]{1,253}"       # domain: alphanumeric + dots + hyphens
+    r"\.[a-zA-Z]{2,}$"             # TLD: letters only, at least 2
+)
 
 
 def _extract_token_from_request() -> Optional[str]:
@@ -764,9 +822,15 @@ def admin_portal_required(fn):
 # Blueprint routes
 # ---------------------------------------------------------------------------
 
-_login_attempts: dict = {}  # ip -> [timestamp, ...]
-_RATE_LIMIT_WINDOW = 900   # 15 minutes
-_RATE_LIMIT_MAX    = 10    # max failed attempts per window
+_login_attempts:    dict = {}  # ip -> [timestamp, ...]
+_register_attempts: dict = {}  # ip -> [timestamp, ...]
+_forgot_attempts:   dict = {}  # ip -> [timestamp, ...]
+_RATE_LIMIT_WINDOW = 900   # 15 minutes  — login brute-force window
+_RATE_LIMIT_MAX    = 10    # max failed login attempts per window
+_REGISTER_WINDOW   = 60    # 1 minute    — register: 5/minute (strict, matches @limiter.limit("5/minute"))
+_REGISTER_MAX      = 5     # max registration attempts per 1-min window per IP
+_FORGOT_WINDOW     = 900   # 15 minutes  — forgot-password: 3/15 min (email quota protection)
+_FORGOT_MAX        = 3     # max forgot-password attempts per 15-min window per IP
 
 def _check_rate_limit(ip: str) -> bool:
     """Return True if the IP is NOT rate-limited. Cleans up old entries."""
@@ -784,12 +848,33 @@ def _record_failed_login(ip: str) -> None:
     attempts.append(now)
     _login_attempts[ip] = attempts
 
+def _check_and_record_endpoint_limit(store: dict, ip: str, max_calls: int,
+                                     window: int = _RATE_LIMIT_WINDOW) -> bool:
+    """Return True if the request is ALLOWED (under limit), False if rate-limited.
+    Records the current call on every allowed invocation and prunes old timestamps.
+    window: sliding time window in seconds (default: _RATE_LIMIT_WINDOW = 15 min).
+    """
+    now = _time.time()
+    calls = store.get(ip, [])
+    calls = [t for t in calls if now - t < window]
+    if len(calls) >= max_calls:
+        store[ip] = calls
+        return False
+    calls.append(now)
+    store[ip] = calls
+    return True
+
 auth_bp = Blueprint("auth_bp", __name__, url_prefix="/auth")
 
 
 @auth_bp.route("/register", methods=["POST"])
 def register():
     """POST /auth/register — Create account + trial subscription + send verification email."""
+    ip = _get_client_ip()
+    if not _check_and_record_endpoint_limit(_register_attempts, ip or "unknown", _REGISTER_MAX, _REGISTER_WINDOW):
+        logger.warning("register: rate limit hit for IP %s", ip)
+        return jsonify({"error": "Too many registration attempts. Please wait 1 minute before trying again."}), 429
+
     data = request.get_json(silent=True) or {}
     email     = (data.get("email")     or "").strip().lower()
     password  =  data.get("password",  "")
@@ -1010,6 +1095,11 @@ def logout():
 @auth_bp.route("/forgot-password", methods=["POST"])
 def forgot_password():
     """POST /auth/forgot-password — Send password reset link via email."""
+    ip = _get_client_ip()
+    if not _check_and_record_endpoint_limit(_forgot_attempts, ip or "unknown", _FORGOT_MAX, _FORGOT_WINDOW):
+        logger.warning("forgot_password: rate limit hit for IP %s", ip)
+        return jsonify({"error": "Too many password reset requests. Please wait 15 minutes before trying again."}), 429
+
     data  = request.get_json(silent=True) or {}
     email = (data.get("email") or "").strip().lower()
 
@@ -1343,8 +1433,23 @@ def update_profile():
         updates["email"] = email
 
     if new_pw:
-        if len(new_pw) < 8:
-            return jsonify({"error": "Password must be at least 8 characters"}), 422
+        # ── Password policy: same rules as signup and reset-password ───────
+        if len(new_pw) < 12:
+            return jsonify({"error": "Password must be at least 12 characters"}), 422
+
+        # ── Reuse prevention: block last 3 passwords ────────────────────────
+        old_hashes = models.get_password_history(g.user_id, limit=3)
+        for old_hash in old_hashes:
+            if check_password(new_pw, old_hash):
+                return jsonify({
+                    "error": "You cannot reuse one of your last 3 passwords. Please choose a different password."
+                }), 422
+
+        # ── Persist: store current hash in history, then update ─────────────
+        current_user = models.get_user_by_id(g.user_id)
+        if current_user and current_user.get("password_hash"):
+            models.store_password_in_history(g.user_id, current_user["password_hash"])
+
         pw_hash = hash_password(new_pw)
         with models.db_cursor() as cur:
             cur.execute(
@@ -1352,6 +1457,11 @@ def update_profile():
                 (pw_hash, g.user_id),
             )
         updates["password"] = "***"  # Don't send actual password back
+
+        # ── Security email: notify user their password was changed ───────────
+        user_for_email = models.get_user_by_id(g.user_id)
+        if user_for_email and user_for_email.get("email"):
+            _notify_password_changed(user_for_email["email"])
 
     if updates:
         models.log_audit(

@@ -499,10 +499,15 @@ def verify_and_rotate_refresh_token(user_id: str, incoming_hash: str) -> bool:
             (user_id,),
         )
         row = cur.fetchone()
-        if not row or not row["refresh_token_hash"]:
+        if not row:
+            return True
+        if row["refresh_token_hash"] is None:
             # No hash stored yet (legacy session pre-rotation) — accept once
             # and let the caller store a new hash going forward.
             return True
+        if row["refresh_token_hash"] == "":
+            # Explicitly invalidated (e.g. by logout) — reject
+            return False
         if row["refresh_token_hash"] != incoming_hash:
             return False
         # Clear immediately so the same token cannot be reused
@@ -518,24 +523,21 @@ def update_user_profile(user_id: str, full_name: Optional[str] = None, email: Op
     if full_name is None and email is None:
         return
 
-    updates = []
-    params = []
-
-    if full_name is not None:
-        updates.append("full_name = %s")
-        params.append(full_name)
-    if email is not None:
-        updates.append("email = %s")
-        params.append(email)
-
-    updates.append("updated_at = NOW()")
-    params.append(user_id)
+    # Explicit SQL templates per field combination — avoids dynamic f-string
+    # SQL construction flagged by static analysis (Bandit B608).
+    # All column names are hardcoded; only VALUES go through %s params.
+    if full_name is not None and email is not None:
+        sql    = "UPDATE users SET full_name = %s, email = %s, updated_at = NOW() WHERE id = %s"
+        params = [full_name, email, user_id]
+    elif full_name is not None:
+        sql    = "UPDATE users SET full_name = %s, updated_at = NOW() WHERE id = %s"
+        params = [full_name, user_id]
+    else:
+        sql    = "UPDATE users SET email = %s, updated_at = NOW() WHERE id = %s"
+        params = [email, user_id]
 
     with db_cursor() as cur:
-        cur.execute(
-            f"UPDATE users SET {', '.join(updates)} WHERE id = %s",
-            params,
-        )
+        cur.execute(sql, params)
 
 
 def set_user_password(user_id: str, password_hash: str):
@@ -790,7 +792,7 @@ def get_daily_run_count(user_id: str) -> int:
         cur.execute(
             """
             SELECT count FROM daily_run_counts
-            WHERE user_id = %s AND run_date = CURRENT_DATE
+            WHERE user_id = %s AND run_date = (NOW() AT TIME ZONE 'America/New_York')::date
             """,
             (user_id,),
         )
@@ -804,7 +806,7 @@ def increment_daily_run_count(user_id: str) -> int:
         cur.execute(
             """
             INSERT INTO daily_run_counts (user_id, run_date, count)
-            VALUES (%s, CURRENT_DATE, 1)
+            VALUES (%s, (NOW() AT TIME ZONE 'America/New_York')::date, 1)
             ON CONFLICT (user_id, run_date) DO UPDATE
                 SET count = daily_run_counts.count + 1
             RETURNING count
@@ -821,7 +823,7 @@ def decrement_daily_run_count(user_id: str) -> int:
             """
             UPDATE daily_run_counts
             SET count = GREATEST(0, count - 1)
-            WHERE user_id = %s AND run_date = CURRENT_DATE
+            WHERE user_id = %s AND run_date = (NOW() AT TIME ZONE 'America/New_York')::date
             RETURNING count
             """,
             (user_id,),
@@ -836,7 +838,7 @@ def reset_daily_run_count(user_id: str):
         cur.execute(
             """
             UPDATE daily_run_counts SET count = 0
-            WHERE user_id = %s AND run_date = CURRENT_DATE
+            WHERE user_id = %s AND run_date = (NOW() AT TIME ZONE 'America/New_York')::date
             """,
             (user_id,),
         )
@@ -849,7 +851,7 @@ def set_daily_run_count(user_id: str, count: int) -> int:
         cur.execute(
             """
             INSERT INTO daily_run_counts (user_id, run_date, count)
-            VALUES (%s, CURRENT_DATE, %s)
+            VALUES (%s, (NOW() AT TIME ZONE 'America/New_York')::date, %s)
             ON CONFLICT (user_id, run_date) DO UPDATE
                 SET count = EXCLUDED.count
             RETURNING count
@@ -892,7 +894,7 @@ def get_all_users_admin() -> List[Dict[str, Any]]:
             LEFT JOIN subscriptions s ON s.user_id = u.id
             LEFT JOIN plans p ON s.plan_id = p.id
             LEFT JOIN daily_run_counts drc
-                   ON drc.user_id = u.id AND drc.run_date = CURRENT_DATE
+                   ON drc.user_id = u.id AND drc.run_date = (NOW() AT TIME ZONE 'America/New_York')::date
             LEFT JOIN admin_users au ON u.id = au.user_id
             ORDER BY u.created_at DESC
             """
@@ -1107,7 +1109,7 @@ def get_runs_today_all_users() -> int:
             """
             SELECT COALESCE(SUM(count), 0) AS total
             FROM daily_run_counts
-            WHERE run_date = CURRENT_DATE
+            WHERE run_date = (NOW() AT TIME ZONE 'America/New_York')::date
             """
         )
         row = cur.fetchone()

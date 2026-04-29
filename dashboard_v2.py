@@ -192,6 +192,32 @@ def _security_headers(response):
     response.headers.setdefault("X-XSS-Protection", "1; mode=block")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+
+    # HSTS — instruct browsers to always use HTTPS for this domain (1 year)
+    response.headers.setdefault(
+        "Strict-Transport-Security",
+        "max-age=31536000; includeSubDomains",
+    )
+
+    # CSP — restrict resource origins; 'unsafe-inline' is required for the
+    # single-file SPA (all JS/CSS is inline). Stripe needs its own origins
+    # for the payment widget and 3-D Secure iframe.
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://js.stripe.com; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: https:; "
+            "connect-src 'self' https://api.stripe.com; "
+            "frame-src https://js.stripe.com; "
+            "font-src 'self' data:; "
+            "object-src 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self';"
+        ),
+    )
+
     # Allow same-origin framing for admin panel only
     if request.path.startswith("/admin"):
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
@@ -306,16 +332,17 @@ def _persist_run_state(user_id: str) -> None:
     """Write a user's finished-run state (including run summary stats) to disk for restart persistence."""
     try:
         state = _user_run_states.get(user_id, _default_run_state())
-        with open(_user_state_file(user_id), "w") as f:
-            json.dump({
-                "started_at":        state.get("started_at"),
-                "finished_at":       state.get("finished_at"),
-                "exit_code":         state.get("exit_code"),
-                # Only the last *successful* completion time — shown in LAST RUN KPI card
-                "last_completed_at": state.get("last_completed_at"),
-                # Persist run summary so stats bar survives any restart
-                "run_summary":       state.get("run_summary", {}),
-            }, f, indent=2)
+        _atomic_write_json(_user_state_file(user_id), {
+            "started_at":        state.get("started_at"),
+            "finished_at":       state.get("finished_at"),
+            "exit_code":         state.get("exit_code"),
+            # Only the last *successful* completion time — shown in LAST RUN KPI card
+            "last_completed_at": state.get("last_completed_at"),
+            # Persist run summary so stats bar survives any restart
+            "run_summary":       state.get("run_summary", {}),
+            # Persist completed-run duration so stats bar time field survives restarts
+            "last_completed_duration_secs": state.get("last_completed_duration_secs"),
+        })
     except Exception as _e:
         logger.warning("Could not persist run state for %s: %s", user_id, _e)
 
@@ -343,6 +370,8 @@ def _load_persisted_run_states() -> None:
                     "last_completed_at": _last_completed,
                     # Restore persisted run summary so stats bar works immediately after restart
                     "run_summary":       saved.get("run_summary", {}),
+                    # Restore last completed run duration so stats bar time field works after restart
+                    "last_completed_duration_secs": saved.get("last_completed_duration_secs"),
                 }
             except Exception as _e:
                 logger.warning("Could not load persisted run state for %s: %s", uid, _e)
@@ -363,7 +392,7 @@ def _get_run_state(user_id: "str | None" = None) -> dict:
     # worker's in-memory dict still has the stale pre-run snapshot.
     # Always sync from disk when the fields are absent so every worker shows
     # the correct "Last Run" KPI card values.
-    if not state.get("last_completed_at") or not state.get("run_summary"):
+    if not state.get("last_completed_at") or not state.get("run_summary") or state.get("last_completed_duration_secs") is None:
         try:
             sf = _user_state_file(user_id)
             if os.path.exists(sf):
@@ -373,6 +402,8 @@ def _get_run_state(user_id: "str | None" = None) -> dict:
                     state["last_completed_at"] = saved["last_completed_at"]
                 if not state.get("run_summary") and saved.get("run_summary"):
                     state["run_summary"] = saved["run_summary"]
+                if state.get("last_completed_duration_secs") is None and saved.get("last_completed_duration_secs") is not None:
+                    state["last_completed_duration_secs"] = saved["last_completed_duration_secs"]
                 # Back-fill this worker's in-memory dict so subsequent requests are
                 # served from memory without a disk read.
                 mem = _user_run_states.setdefault(user_id, _default_run_state())
@@ -380,6 +411,8 @@ def _get_run_state(user_id: "str | None" = None) -> dict:
                     mem["last_completed_at"] = saved["last_completed_at"]
                 if not mem.get("run_summary") and saved.get("run_summary"):
                     mem["run_summary"] = saved["run_summary"]
+                if mem.get("last_completed_duration_secs") is None and saved.get("last_completed_duration_secs") is not None:
+                    mem["last_completed_duration_secs"] = saved["last_completed_duration_secs"]
         except Exception as _dse:
             logger.debug("Could not sync run state from disk for %s: %s", user_id, _dse)
 
@@ -509,16 +542,26 @@ def _start_agent(user_id: "str | None" = None, source: str = "manual"):
         finished_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         with _run_lock:
             prev = _user_run_states.get(uid, {})
+            # For non-zero exits (stop/crash), carry forward the last successful
+            # run_summary and last_completed_duration_secs so _monitor() never
+            # overwrites the preserved stats that _stop_agent() already restored.
+            _carry_summary  = prev.get("run_summary") or {}
+            _carry_duration = prev.get("last_completed_duration_secs")
             _user_run_states[uid] = {
                 "running":           False,
                 "started_at":        prev.get("started_at"),
                 "finished_at":       finished_at,
                 "exit_code":         p.returncode,
-                "run_summary":       {},
+                # Successful run: start with empty dict, filled in below via _parse_run_summary.
+                # Stopped/failed run: carry forward the last completed run's summary so the
+                # stats bar keeps showing real data instead of reverting to "—".
+                "run_summary":       {} if p.returncode == 0 else _carry_summary,
                 "source":            prev.get("source", "manual"),  # preserve source after run ends
                 # Only update last_completed_at on a clean exit — stops/crashes keep the
                 # previous successful timestamp so LAST RUN always reflects a completed run.
                 "last_completed_at": finished_at if p.returncode == 0 else prev.get("last_completed_at"),
+                # Preserve duration from last completed run for stopped/failed exits.
+                "last_completed_duration_secs": None if p.returncode == 0 else _carry_duration,
             }
             _user_processes.pop(uid, None)
         # After a successful run, parse the completion stats from the agent log
@@ -532,6 +575,17 @@ def _start_agent(user_id: "str | None" = None, source: str = "manual"):
                     logger.debug("Persisting run_summary for user %s: %s", uid[:8], summary)
             except Exception as _sum_err:
                 logger.warning("Could not parse run_summary for user %s: %s", uid[:8], _sum_err)
+            # Store this run's duration so the stats bar can show it even after
+            # a subsequent run is stopped (which would otherwise clobber start/end times).
+            try:
+                with _run_lock:
+                    _sa = _user_run_states[uid].get("started_at", "")
+                    if _sa:
+                        _s = datetime.fromisoformat(_sa.replace("Z", "+00:00"))
+                        _f = datetime.fromisoformat(finished_at.replace("Z", "+00:00"))
+                        _user_run_states[uid]["last_completed_duration_secs"] = max(0, int((_f - _s).total_seconds()))
+            except Exception:
+                pass
         # Remove PID file — signals all workers this run is done
         try:
             os.remove(os.path.join(_user_data_dir(uid), "agent_running.json"))
@@ -547,30 +601,87 @@ def _start_agent(user_id: "str | None" = None, source: str = "manual"):
 
 
 def _stop_agent(user_id: "str | None" = None):
-    """Terminate the running subprocess for a specific user."""
+    """Terminate the running subprocess for a specific user.
+
+    Cross-worker safe: if this Gunicorn worker did not launch the subprocess
+    (so _user_processes[user_id] is None), fall back to the agent_running.json
+    PID file and kill the process directly via os.kill().  This ensures that a
+    stop request routed to a different worker than the one that started the run
+    always terminates the process instead of silently returning "No agent running".
+    """
     if not user_id:
         return False, "user_id required"
+    pid_file = os.path.join(_user_data_dir(user_id), "agent_running.json")
     with _run_lock:
         state = _user_run_states.get(user_id, _default_run_state())
         proc  = _user_processes.get(user_id)
-        if not state.get("running") or proc is None:
+
+        # Determine whether a run is actually active on ANY worker:
+        # 1. This worker owns the proc object, OR
+        # 2. The PID file exists (another worker launched it and it's still alive)
+        pid_from_file = None
+        if proc is None and os.path.exists(pid_file):
+            try:
+                with open(pid_file) as _pf:
+                    _pd = json.load(_pf)
+                _pid = _pd.get("pid")
+                if _pid:
+                    try:
+                        os.kill(_pid, 0)   # signal 0: check existence only
+                        pid_from_file = _pid
+                    except (ProcessLookupError, PermissionError):
+                        pass   # process already dead — still clean up below
+            except Exception:
+                pass
+
+        if proc is None and pid_from_file is None and not state.get("running"):
             return False, "No agent running"
-        try:
-            proc.terminate()
-        except Exception:
-            pass
+
+        # Terminate: prefer the proc object; fall back to PID from file
+        if proc is not None:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+        elif pid_from_file is not None:
+            try:
+                os.kill(pid_from_file, signal.SIGTERM)
+            except Exception:
+                pass
+
+        # Recover run_summary and last_completed_duration_secs from previous completed
+        # run so the stats bar keeps showing real data after a stop.
+        # If this worker has no in-memory state (cross-worker stop), fall back to disk.
+        _prev_summary  = state.get("run_summary") or {}
+        _prev_duration = state.get("last_completed_duration_secs")
+        if not _prev_summary or _prev_duration is None:
+            try:
+                sf = _user_state_file(user_id)
+                if os.path.exists(sf):
+                    with open(sf) as _sf:
+                        _saved = json.load(_sf)
+                    if not _prev_summary:
+                        _prev_summary  = _saved.get("run_summary") or {}
+                    if _prev_duration is None:
+                        _prev_duration = _saved.get("last_completed_duration_secs")
+            except Exception:
+                pass
+
         _user_run_states[user_id] = {
-            "running":           False,
-            "started_at":        state.get("started_at"),
-            "finished_at":       datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "exit_code":         -1,
+            "running":                      False,
+            "started_at":                   state.get("started_at"),
+            "finished_at":                  datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "exit_code":                    -1,
             # Preserve last successful completion time — stop events must not overwrite it
-            "last_completed_at": state.get("last_completed_at"),
+            "last_completed_at":            state.get("last_completed_at"),
+            # Preserve stats from the last completed run so the stats bar stays populated
+            "run_summary":                  _prev_summary,
+            "last_completed_duration_secs": _prev_duration,
         }
         _user_processes.pop(user_id, None)
     # Remove PID file on manual stop
     try:
-        os.remove(os.path.join(_user_data_dir(user_id), "agent_running.json"))
+        os.remove(pid_file)
     except FileNotFoundError:
         pass
     except Exception:
@@ -959,6 +1070,7 @@ def _get_plan_info(user_id: "str | None") -> dict:
             "ticker_runs_limit": ticker_limit,  # None = unlimited, 0 = not allowed
             "trial_ends_at": str(sub.get("trial_ends_at", "")) if sub.get("trial_ends_at") else None,
             "expires_at": str(sub.get("expires_at", "")) if sub.get("expires_at") else None,
+            "resets_at": access.get("resets_at"),  # e.g. "12:00 AM EDT"
         }
     except Exception:
         return {"plan": "Unknown", "status": "active", "runs_today": 0,
@@ -1451,9 +1563,13 @@ def api_status():
     m     = r // 60
     plan_info = _get_plan_info(user_id)
     run_state = _get_run_state(user_id)
-    # Calculate last run duration in seconds
+    # Calculate last run duration in seconds.
+    # For stopped runs (exit_code=-1) use the stored last_completed_duration_secs so
+    # the stats bar shows the last *successful* run's time, not the partial stop time.
     duration_secs = None
-    if run_state.get("finished_at") and run_state.get("started_at"):
+    if run_state.get("exit_code") == -1 and run_state.get("last_completed_duration_secs") is not None:
+        duration_secs = run_state["last_completed_duration_secs"]
+    elif run_state.get("finished_at") and run_state.get("started_at"):
         try:
             started  = datetime.fromisoformat(run_state["started_at"].replace("Z", "+00:00"))
             finished = datetime.fromisoformat(run_state["finished_at"].replace("Z", "+00:00"))
@@ -1688,9 +1804,25 @@ def api_etf_run():
 @auth_required
 def api_etf_stop():
     user_id = getattr(g, "user_id", None)
+    # Cross-worker safe: also check the flag file so a stop request routed to a
+    # different Gunicorn worker (whose _user_etf_states dict is empty) still
+    # cleans up correctly instead of returning "No ETF screen running".
+    rf = os.path.join(_user_data_dir(user_id), "etf_running.json") if user_id else None
+    file_running = False
+    if rf:
+        try:
+            if os.path.exists(rf):
+                with open(rf) as _f:
+                    _fd = json.load(_f)
+                _started = datetime.fromisoformat(
+                    _fd.get("started_at", "1970-01-01T00:00:00+00:00").replace("Z", "+00:00"))
+                if (datetime.now(timezone.utc) - _started).total_seconds() < 1800:
+                    file_running = True
+        except Exception:
+            pass
     with _etf_state_lock:
         user_etf = _user_etf_states.get(user_id, _default_etf_state())
-        was_running = user_etf.get("running", False)
+        was_running = user_etf.get("running", False) or file_running
         if not was_running:
             return jsonify({"ok": False, "message": "No ETF screen running for your account"})
         cancel_ev = _user_etf_cancel.setdefault(user_id, threading.Event())
@@ -1703,9 +1835,9 @@ def api_etf_stop():
             logger.warning("Could not decrement run count on ETF stop: %s", _e)
     # Delete the running flag file immediately so the stale-check in
     # api_etf_status() does not mistake the stopped run as still running.
-    if user_id:
+    if rf:
         try:
-            os.remove(os.path.join(_user_data_dir(user_id), "etf_running.json"))
+            os.remove(rf)
         except Exception:
             pass
     logger.info("ETF screen stopped by user %s", user_id[:8] if user_id else "unknown")
@@ -1716,9 +1848,25 @@ def api_etf_stop():
 @auth_required
 def api_bond_stop():
     user_id = getattr(g, "user_id", None)
+    # Cross-worker safe: also check the flag file so a stop request routed to a
+    # different Gunicorn worker (whose _user_bond_states dict is empty) still
+    # cleans up correctly instead of returning "No Bond screen running".
+    rf = os.path.join(_user_data_dir(user_id), "bond_running.json") if user_id else None
+    file_running = False
+    if rf:
+        try:
+            if os.path.exists(rf):
+                with open(rf) as _f:
+                    _fd = json.load(_f)
+                _started = datetime.fromisoformat(
+                    _fd.get("started_at", "1970-01-01T00:00:00+00:00").replace("Z", "+00:00"))
+                if (datetime.now(timezone.utc) - _started).total_seconds() < 1800:
+                    file_running = True
+        except Exception:
+            pass
     with _bond_state_lock:
         user_bond = _user_bond_states.get(user_id, _default_bond_state())
-        was_running = user_bond.get("running", False)
+        was_running = user_bond.get("running", False) or file_running
         if not was_running:
             return jsonify({"ok": False, "message": "No Bond screen running for your account"})
         cancel_ev = _user_bond_cancel.setdefault(user_id, threading.Event())
@@ -1731,9 +1879,9 @@ def api_bond_stop():
             logger.warning("Could not decrement run count on Bond stop: %s", _e)
     # Delete the running flag file immediately so the stale-check in
     # api_bond_status() does not mistake the stopped run as still running.
-    if user_id:
+    if rf:
         try:
-            os.remove(os.path.join(_user_data_dir(user_id), "bond_running.json"))
+            os.remove(rf)
         except Exception:
             pass
     logger.info("Bond screen stopped by user %s", user_id[:8] if user_id else "unknown")
@@ -2105,12 +2253,60 @@ def _add_user_schedule_job(scheduler, user_id: str, hour: int, minute: int,
 
 _scheduler = None  # set by _init_scheduler() at startup
 
+# Flag file: any worker touches this to tell the leader to reload schedules from DB.
+_SCHED_RELOAD_FLAG = os.path.join(AGENT_DIR, ".scheduler_reload")
 
-def update_user_schedule_job(user_id: str) -> None:
-    """Re-read a user's config from DB/disk and update their scheduler job live."""
+
+def _sync_all_schedules_from_db() -> None:
+    """
+    Re-read every user's schedule from DB and update the in-process APScheduler jobs.
+    Runs in the leader worker only (called by the 60-second interval job and on startup).
+    Also clears the reload-flag file written by non-leader workers.
+    """
     global _scheduler
     if _scheduler is None:
         return
+    # Clear the flag regardless of what we find so stale flags don't loop.
+    try:
+        if os.path.exists(_SCHED_RELOAD_FLAG):
+            os.remove(_SCHED_RELOAD_FLAG)
+    except Exception:
+        pass
+    if not _DB_AVAILABLE:
+        return
+    try:
+        rows = models.get_all_active_user_schedules()
+        for row in rows:
+            uid     = str(row["user_id"])
+            hour    = int(row.get("schedule_hour", 18))
+            minute  = int(row.get("schedule_minute", 0))
+            raw     = row.get("schedule_days", "0,1,2,3,4")
+            days    = [int(d) for d in (raw.split(",") if isinstance(raw, str) else raw)]
+            enabled = bool(row.get("schedule_enabled", True))
+            _add_user_schedule_job(_scheduler, uid, hour, minute, days, enabled)
+        logger.debug("Scheduler: synced %d user job(s) from DB", len(rows))
+    except Exception as _se:
+        logger.error("Scheduler: DB sync failed: %s", _se)
+
+
+def update_user_schedule_job(user_id: str) -> None:
+    """
+    Re-read a user's config from DB/disk and update their scheduler job live.
+
+    If this worker IS the scheduler leader → update immediately.
+    If this worker is NOT the leader (80% of Gunicorn requests) → touch a flag
+    file so the leader's 60-second sync job picks up the change within one minute.
+    """
+    global _scheduler
+    if _scheduler is None:
+        # Non-leader worker: signal the leader via flag file.
+        try:
+            open(_SCHED_RELOAD_FLAG, "w").close()
+            logger.debug("Schedule reload flag set by non-leader worker pid=%d", os.getpid())
+        except Exception as _fe:
+            logger.warning("Could not set schedule reload flag: %s", _fe)
+        return
+    # Leader worker: update immediately.
     try:
         cfg = _load_config(user_id)
         hour   = int(cfg.get("schedule_hour", 18))
@@ -2126,7 +2322,10 @@ def update_user_schedule_job(user_id: str) -> None:
 def _init_scheduler():
     """Initialize background scheduler with one cron job per active user."""
     try:
-        scheduler = BackgroundScheduler()
+        # Explicitly use Eastern Time so that schedule_hour/minute values entered
+        # by users in the UI (which are always in EST/EDT) fire at the correct
+        # wall-clock time regardless of the server's local timezone (typically UTC).
+        scheduler = BackgroundScheduler(timezone=_TZ_EST)
         scheduler.start()
         job_count = 0
 
@@ -2149,6 +2348,24 @@ def _init_scheduler():
                 _init_scheduler_fallback(scheduler)
         else:
             _init_scheduler_fallback(scheduler)
+
+        # ── Periodic DB sync ─────────────────────────────────────────────────
+        # Re-reads all user schedules every 60 seconds.  This ensures that when
+        # a user saves a new schedule via the UI and the HTTP request hits a
+        # non-leader Gunicorn worker (which has _scheduler=None and therefore
+        # can't update the leader's APScheduler), the leader picks up the
+        # change within at most 60 seconds via this sync job.  It also checks
+        # for the _SCHED_RELOAD_FLAG file written by non-leader workers.
+        scheduler.add_job(
+            _sync_all_schedules_from_db,
+            'interval',
+            seconds=60,
+            id='_schedule_db_sync',
+            name='Schedule DB sync (every 60 s)',
+            replace_existing=True,
+            max_instances=1,
+        )
+        logger.info("Scheduler: 60-second DB sync job registered")
 
         return scheduler
     except Exception as e:
@@ -2184,6 +2401,41 @@ def _init_scheduler_fallback(scheduler) -> None:
     except Exception as e:
         logger.error("Scheduler fallback init failed: %s", e)
 
+
+# ── Gunicorn-safe scheduler startup ──────────────────────────────────────────
+# Under Gunicorn, __name__ is "dashboard_v2" (not "__main__"), so the
+# if __name__ == "__main__" block below never runs.  We therefore start the
+# scheduler here at module level, but use a non-blocking file lock so that
+# exactly ONE Gunicorn worker process becomes the "scheduler worker".  All
+# other workers skip silently.  When the winning worker exits (crash/restart),
+# the OS releases the lock and the next worker to reload acquires it.
+_SCHEDULER_LOCK_FD = None   # module-level ref keeps the lock alive for this process
+
+
+def _try_start_scheduler_if_leader() -> None:
+    """Acquire a cross-process file lock and, if successful, start the scheduler."""
+    global _scheduler, _SCHEDULER_LOCK_FD
+    if _scheduler is not None:
+        return   # already initialised (e.g. by __main__ block)
+    lock_path = os.path.join(AGENT_DIR, ".scheduler.lock")
+    try:
+        import fcntl
+        fd = open(lock_path, "w")
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)   # non-blocking exclusive lock
+        _SCHEDULER_LOCK_FD = fd          # keep open — lock released when process dies
+        _scheduler = _init_scheduler()
+        logger.info("Scheduler started in worker pid=%d", os.getpid())
+    except (IOError, OSError):
+        logger.debug("Scheduler lock held by another worker (pid=%d) — skipping", os.getpid())
+    except Exception as _sl_err:
+        logger.warning("Scheduler startup error in pid=%d: %s", os.getpid(), _sl_err)
+
+
+# Run at import time so Gunicorn workers start the scheduler automatically.
+# The lock ensures only ONE worker wins; the rest skip cleanly.
+_try_start_scheduler_if_leader()
+
+
 if __name__ == "__main__":
     os.makedirs(LOG_DIR, exist_ok=True)
     print("=" * 55)
@@ -2193,7 +2445,9 @@ if __name__ == "__main__":
     print(f"  Dir : {AGENT_DIR}")
     print("=" * 55)
 
-    # Start background scheduler for automatic daily runs
-    _scheduler = _init_scheduler()
+    # _try_start_scheduler_if_leader() already ran above — _scheduler is set.
+    # Only call _init_scheduler() again if somehow it was not acquired above.
+    if _scheduler is None:
+        _scheduler = _init_scheduler()
 
     app.run(host="0.0.0.0", port=PORT, debug=False, threaded=True)
