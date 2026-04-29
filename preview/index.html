@@ -643,11 +643,12 @@
     <div class="form-pane" id="auth-pane-register">
       <div class="form-group">
         <label>Full name</label>
-        <input type="text" id="r-name" placeholder="">
+        <input type="text" id="r-name" placeholder="" oninput="_clearRegError('r-name','r-name-error')">
+        <div id="r-name-error" style="color:var(--red);font-size:.78rem;margin-top:6px;display:none;"></div>
       </div>
       <div class="form-group">
         <label>Email address</label>
-        <input type="email" id="r-email" placeholder="" oninput="document.getElementById('r-email-error').style.display='none'">
+        <input type="email" id="r-email" placeholder="" oninput="_clearRegError('r-email','r-email-error')">
         <div id="r-email-error" style="color:var(--red);font-size:.78rem;margin-top:6px;display:none;"></div>
       </div>
       <div class="form-group">
@@ -2924,31 +2925,122 @@ function updatePasswordStrength(inputId, strengthId) {
   strengthEl.innerHTML = `<span style="color: ${level.color};">${level.label}${tips}</span>`;
 }
 
+// ── Registration field validators ──────────────────────────────────
+function _validateRegName(raw) {
+  const name = (raw || '').trim();
+  if (!name)              return 'Full name is required';
+  if (name.length < 2)    return 'Name must be at least 2 characters';
+  if (name.length > 100)  return 'Name cannot exceed 100 characters';
+  if (/^\s+$/.test(name)) return 'Full name cannot be blank';
+  if (/\d/.test(name))    return 'Name cannot contain numbers';
+  // Allow letters (including accented/international), spaces, hyphens, apostrophes, periods
+  if (/[^a-zA-ZÀ-ÖØ-öø-ÿ\s'\-\.]/.test(name))
+    return "Name contains invalid characters — only letters, spaces, hyphens ( - ), and apostrophes ( ' ) are allowed";
+  if (/\s{2,}/.test(name)) return 'Name contains consecutive spaces — please remove extra spaces';
+  if (/^['\-\.\s]/.test(name) || /['\-\.\s]$/.test(name))
+    return 'Name cannot start or end with a punctuation character';
+  return null; // valid
+}
+
+function _validateRegEmail(raw) {
+  const email = (raw || '').trim();
+  if (!email) return 'Email address is required';
+  if (email.length > 254) return 'Email address is too long (maximum 254 characters)';
+  if (/\s/.test(email))   return 'Email address cannot contain spaces';
+
+  const atCount = (email.match(/@/g) || []).length;
+  if (atCount === 0) return "Email must include '@' — e.g. name@example.com";
+  if (atCount > 1)   return "Email address can only contain one '@' symbol";
+
+  const [local, domain] = email.split('@');
+
+  // Local-part checks
+  if (!local)             return "Please enter a username before '@' — e.g. name@example.com";
+  if (local.length > 64)  return "The part before '@' is too long (maximum 64 characters)";
+  if (local.startsWith('.') || local.endsWith('.'))
+    return "Email username cannot start or end with a dot ( . )";
+  if (local.includes('..'))
+    return "Email username cannot contain consecutive dots (..)";
+  if (/[^a-zA-Z0-9._%+\-]/.test(local))
+    return "Email username contains invalid characters — only letters, numbers, and . _ % + - are allowed";
+
+  // Domain checks
+  if (!domain)                 return "Please enter a domain after '@' — e.g. name@example.com";
+  if (!domain.includes('.'))   return "Email domain must include a dot — e.g. name@example.com";
+  if (domain.startsWith('.') || domain.endsWith('.'))
+    return 'Email domain cannot start or end with a dot';
+  if (domain.includes('..'))   return 'Email domain cannot contain consecutive dots (..)';
+  if (/[^a-zA-Z0-9.\-]/.test(domain))
+    return 'Email domain contains invalid characters';
+
+  const tld = domain.split('.').pop();
+  if (!tld || tld.length < 2) return 'Email domain extension must be at least 2 letters (e.g. .com, .org)';
+  if (!/^[a-zA-Z]+$/.test(tld)) return 'Email domain extension must contain only letters (e.g. .com, .net, .org)';
+
+  // Full RFC-style check
+  if (!/^[a-zA-Z0-9._%+\-]{1,64}@[a-zA-Z0-9.\-]{1,253}\.[a-zA-Z]{2,}$/.test(email))
+    return 'Please enter a valid email address — e.g. name@example.com';
+
+  // Typo hints for popular domains
+  const domainLower = domain.toLowerCase();
+  const _typos = {
+    'gmail.con':'gmail.com','gmail.cpm':'gmail.com','gmail.ocm':'gmail.com',
+    'gmial.com':'gmail.com','gmai.com':'gmail.com','gmil.com':'gmail.com','gmal.com':'gmail.com',
+    'yahoo.con':'yahoo.com','yaho.com':'yahoo.com','yahooo.com':'yahoo.com',
+    'hotmial.com':'hotmail.com','hotmail.con':'hotmail.com','hotmal.com':'hotmail.com','hotmali.com':'hotmail.com',
+    'outlok.com':'outlook.com','outloook.com':'outlook.com','outlook.con':'outlook.com','otulook.com':'outlook.com',
+    'iclould.com':'icloud.com','icloud.con':'icloud.com','icoud.com':'icloud.com',
+    'protonmal.com':'protonmail.com','protonmail.con':'protonmail.com',
+  };
+  if (_typos[domainLower])
+    return `Did you mean ${local}@${_typos[domainLower]}?`;
+
+  return null; // valid
+}
+
+function _showRegError(inputId, errorId, msg) {
+  const el = document.getElementById(errorId);
+  if (el) { el.textContent = '✗ ' + msg; el.style.display = 'block'; }
+  const input = document.getElementById(inputId);
+  if (input) { input.focus(); input.style.borderColor = 'var(--red)'; }
+}
+function _clearRegError(inputId, errorId) {
+  const el = document.getElementById(errorId);
+  if (el) { el.textContent = ''; el.style.display = 'none'; }
+  const input = document.getElementById(inputId);
+  if (input) input.style.borderColor = '';
+}
+
 // ── REGISTER — real POST /auth/register ────────────────────────────
 async function doRegister() {
   const name  = (document.getElementById('r-name').value  || '').trim();
   const email = (document.getElementById('r-email').value || '').trim();
   const pwd   =  document.getElementById('r-pwd').value   || '';
-  const disclaimer = document.getElementById('r-disclaimer');
+  const disclaimer    = document.getElementById('r-disclaimer');
   const disclaimerError = document.getElementById('r-disclaimer-error');
 
-  if (!name || !email || !pwd) { showToast('Please fill in all fields', 'error'); return; }
+  // Clear all field errors first
+  _clearRegError('r-name',  'r-name-error');
+  _clearRegError('r-email', 'r-email-error');
 
-  // Email format validation — must match user@domain.tld
-  const _emailRe = /^[a-zA-Z0-9._%+\-]{1,64}@[a-zA-Z0-9.\-]{1,253}\.[a-zA-Z]{2,}$/;
-  const emailErrEl = document.getElementById('r-email-error');
-  if (!_emailRe.test(email)) {
-    if (emailErrEl) {
-      emailErrEl.textContent = '✗ Please enter a valid email address (e.g. name@example.com)';
-      emailErrEl.style.display = 'block';
-    }
-    document.getElementById('r-email').focus();
-    showToast('Please enter a valid email address', 'error');
+  // ── Name validation
+  const nameErr = _validateRegName(name);
+  if (nameErr) {
+    _showRegError('r-name', 'r-name-error', nameErr);
+    showToast(nameErr, 'error');
     return;
   }
-  if (emailErrEl) emailErrEl.style.display = 'none';
 
-  if (pwd.length < 12)          { showToast('Password must be at least 12 characters', 'error'); return; }
+  // ── Email validation
+  const emailErr = _validateRegEmail(email);
+  if (emailErr) {
+    _showRegError('r-email', 'r-email-error', emailErr);
+    showToast(emailErr, 'error');
+    return;
+  }
+
+  if (!pwd) { showToast('Password is required', 'error'); return; }
+  if (pwd.length < 12) { showToast('Password must be at least 12 characters', 'error'); return; }
 
   // Check if disclaimer is checked
   if (!disclaimer || !disclaimer.checked) {
