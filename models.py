@@ -1481,16 +1481,19 @@ def get_metrics_series(range_label: str = "24h") -> List[Dict[str, Any]]:
       screener_runs_active, http_connections, active_users_today
     """
     if range_label == "7d":
-        interval = "7 days"
-        bucket   = "1 hour"
+        interval      = "7 days"
+        interval_days = "7"
+        bucket        = "hour"
     elif range_label == "30d":
-        interval = "30 days"
-        bucket   = "6 hours"
+        interval      = "30 days"
+        interval_days = "30"
+        bucket        = "day"
     else:  # 24h (default)
-        interval = "24 hours"
-        bucket   = "5 minutes"
+        interval      = "24 hours"
+        interval_days = "1"
+        bucket        = "minute"
 
-    # bucket is from a safe fixed set — not user input — so f-string here is safe
+    # bucket is a safe fixed unit string for date_trunc — not user input
     sql = f"""
         SELECT
             date_trunc('{bucket}', sampled_at)  AS ts,
@@ -1506,8 +1509,6 @@ def get_metrics_series(range_label: str = "24h") -> List[Dict[str, Any]]:
         GROUP BY 1
         ORDER BY 1 ASC
     """
-    # Parse interval days from the label for the parameterized query
-    interval_days = {"24 hours": "1", "7 days": "7", "30 days": "30"}[interval]
 
     with db_cursor(commit=False) as cur:
         cur.execute(sql, (interval_days,))
