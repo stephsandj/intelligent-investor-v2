@@ -1771,6 +1771,12 @@
           </div>
         </div>
 
+        <!-- Lock banner — shown only while a stock screen run is active -->
+        <div id="settings-run-lock-banner" style="display:none;align-items:center;gap:10px;background:rgba(227,179,65,0.07);border:1px solid rgba(227,179,65,0.28);border-radius:9px;padding:11px 16px;margin-bottom:18px;font-size:.82rem;color:var(--yellow,#e3b341)">
+          <span style="font-size:1rem">⏸</span>
+          <span><strong>Settings locked</strong> — a Stock Screen run is in progress. Fields will unlock automatically when the run completes.</span>
+        </div>
+
         <div class="main-grid">
           <!-- Left: Profile + Password -->
           <div>
@@ -1788,7 +1794,7 @@
                   style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;background:var(--surface2);color:var(--text);font-size:.88rem;outline:none;transition:border-color .15s"
                   onfocus="this.style.borderColor='var(--orange)'" onblur="this.style.borderColor='var(--border)'">
               </div>
-              <button class="btn btn-orange" style="font-size:.82rem;padding:8px 20px" onclick="saveSettingsProfile()">Save Profile</button>
+              <button id="settings-save-profile-btn" class="btn btn-orange" style="font-size:.82rem;padding:8px 20px" onclick="saveSettingsProfile()">Save Profile</button>
             </div>
 
             <div class="section-title" style="margin-top:18px">Change Password</div>
@@ -1807,7 +1813,7 @@
                   style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;background:var(--surface2);color:var(--text);font-size:.88rem;outline:none;transition:border-color .15s"
                   onfocus="this.style.borderColor='var(--orange)'" onblur="this.style.borderColor='var(--border)'">
               </div>
-              <button class="btn btn-orange" style="font-size:.82rem;padding:8px 20px" onclick="saveSettingsPassword()">Change Password</button>
+              <button id="settings-change-pw-btn" class="btn btn-orange" style="font-size:.82rem;padding:8px 20px" onclick="saveSettingsPassword()">Change Password</button>
             </div>
           </div>
 
@@ -1845,14 +1851,14 @@
                   <button class="sched-day-btn" data-day="6" onclick="toggleSchedDay(this)">Sun</button>
                 </div>
               </div>
-              <button class="btn btn-orange" style="font-size:.82rem;padding:8px 20px" onclick="saveSchedule()">Save Schedule</button>
+              <button id="settings-save-sched-btn" class="btn btn-orange" style="font-size:.82rem;padding:8px 20px" onclick="saveSchedule()">Save Schedule</button>
             </div>
 
             <div class="section-title" style="margin-top:18px">Session Security</div>
             <div class="card" style="padding:16px 18px">
               <div style="font-size:.78rem;color:var(--muted);line-height:1.9">
-                <div>• Auto sign-out after <strong style="color:var(--text)">15 minutes</strong> of inactivity</div>
-                <div>• Session tokens expire after <strong style="color:var(--text)">115 minutes</strong> of last activity</div>
+                <div>• Auto sign-out after <strong style="color:var(--text)">5 minutes</strong> of inactivity</div>
+                <div>• Session tokens expire after <strong style="color:var(--text)">15 minutes</strong> of last activity</div>
                 <div>• All sessions are encrypted and logged</div>
               </div>
             </div>
@@ -2313,18 +2319,8 @@ function nav(id) {
   // page, not a screen-section. Writing it causes a blank dashboard on next login
   // because sidebarNav('account') has no matching _showScreenSection branch.
 
-  // Lazy-load data when navigating to dashboard.
-  // Also ensure at least one screen section is active — if none is (e.g. user
-  // navigated to Account & Billing first and sidebarNav was never called),
-  // activate the saved section so the content area is never blank.
-  if (id === 'dashboard') {
-    const anyActive = document.querySelector('#page-dashboard .screen-section.active');
-    if (!anyActive) {
-      const sec = _safeSection(localStorage.getItem('ii_sidebar_section') || 'stocks');
-      _showScreenSection(sec);
-    }
-    _loadDashboard();
-  }
+  // Lazy-load data when navigating to dashboard
+  if (id === 'dashboard') _loadDashboard();
   if (id === 'account')   _refreshAccountPage();
 }
 
@@ -2405,15 +2401,7 @@ async function _restoreSession() {
 
   // Handle email verification redirect params
   const params = new URLSearchParams(window.location.search);
-  if (params.get('portal_return') === '1') {
-    // Stripe Billing Portal redirect back. The browser may have restored a
-    // bfcache snapshot of the previous session instead of re-running JS,
-    // which leaves the content area blank. Strip the param and do ONE hard
-    // reload so the page initialises cleanly from scratch.
-    history.replaceState({}, '', '/');
-    window.location.reload();
-    return;
-  } else if (params.get('payment_success') === '1') {
+  if (params.get('payment_success') === '1') {
     // Store flag in sessionStorage, clear URL, then do ONE clean reload.
     // This eliminates the blank-page flash: the reloaded page starts fresh
     // (no Stripe URL param) and picks up the flag from sessionStorage below.
@@ -2469,7 +2457,7 @@ async function _restoreSession() {
       window._stripePaymentSuccess = false;
       nav('dashboard');
       sidebarNav('stocks');
-      setTimeout(() => showToast('Payment successful — your plan is now active!', 'success'), 500);
+      setTimeout(() => showToast('🎉 Payment successful — your plan is now active!', 'success'), 500);
       return;
     }
 
@@ -2485,11 +2473,6 @@ async function _restoreSession() {
     const savedView    = localStorage.getItem('ii_active_view') || 'dashboard';
     const savedSection = _safeSection(localStorage.getItem('ii_sidebar_section') || 'stocks');
     if (savedView === 'account') {
-      // Prime the active screen section so that the Dashboard page is fully
-      // rendered when the user clicks the Dashboard tab after viewing billing.
-      // We call _showScreenSection directly (not sidebarNav) to avoid
-      // overwriting the 'account' value in localStorage.
-      _showScreenSection(savedSection);
       nav('account');
     } else {
       nav(savedView);
@@ -3084,19 +3067,8 @@ async function doRegister() {
   if (btn) { btn.disabled = false; btn.textContent = 'Start Free Trial →'; }
 
   if (!ok) {
-    if (status === 409) {
-      // Email already in use — show inline on the email field
-      _setRegFieldError('r-email', '✗ An account with this email already exists. Try signing in instead.');
-    } else if (data.fields) {
-      // Server returned per-field validation errors
-      Object.entries(data.fields).forEach(([field, msg]) => {
-        const id = field === 'email' ? 'r-email' : field === 'password' ? 'r-pwd' : field === 'full_name' ? 'r-name' : null;
-        if (id) _setRegFieldError(id, `✗ ${msg}`);
-        else showToast(`${msg}`, 'error');
-      });
-    } else {
-      showToast(data.error || 'Registration failed. Please try again.', 'error');
-    }
+    const msg = data.error || (status === 409 ? 'An account with that email already exists.' : 'Registration failed. Please try again.');
+    showToast(msg, 'error');
     return;
   }
 
@@ -3117,11 +3089,11 @@ async function doRegister() {
     if (data.verify_url) {
       setTimeout(() => _showVerifyWallLink(data.verify_url), 600);
     }
-    showToast('Account created! Check your inbox to verify your email.', 'success');
+    showToast('🎉 Account created! Check your inbox to verify your email.', 'success');
   } else {
     setLoggedIn(true, { user_id: data.user_id, email: data.email }, null);
     nav('dashboard');
-    showToast('Account created! Check your email to verify your address.', 'success');
+    showToast('🎉 Account created! Check your email to verify your address.', 'success');
   }
 }
 
@@ -3143,7 +3115,7 @@ async function doForgotPassword() {
     return;
   }
 
-  showToast('Reset link sent to your email. Check your inbox!', 'success');
+  showToast('✓ Reset link sent to your email. Check your inbox!', 'success');
   document.getElementById('forgot-email').value = '';
 
   // After 3 seconds, switch back to signin
@@ -3180,7 +3152,7 @@ async function doResetPassword() {
     return;
   }
 
-  showToast('Password updated successfully! You can now sign in.', 'success');
+  showToast('✓ Password updated successfully! You can now sign in.', 'success');
   document.getElementById('reset-pwd1').value = '';
   document.getElementById('reset-pwd2').value = '';
 
@@ -3241,31 +3213,16 @@ async function _proceedWithLogout() {
   _api('POST', '/auth/logout').catch(() => {});
 }
 
-// ── SESSION INACTIVITY TIMEOUT (115 minutes) ───────────────────────
-// 15 min matches trading-platform standards (Schwab, Fidelity, IBKR).
-// A 1-minute warning toast gives the user a chance to stay signed in.
-const SESSION_INACTIVITY_MS   = 15 * 60 * 1000; // 115 minutes
-const SESSION_INACTIVITY_WARN =  14 * 60 * 1000; // warn at 14 minutes
-let _inactivityTimer     = null;
-let _inactivityWarnTimer = null;
-let _lastActivityTime    = Date.now();
+// ── SESSION INACTIVITY TIMEOUT (5 minutes) ────────────────────────
+const SESSION_INACTIVITY_MS = 5 * 60 * 1000; // 5 minutes
+let _inactivityTimer = null;
+let _lastActivityTime = Date.now();
 
 function _resetInactivityTimer() {
   if (!_currentUser) return; // Only track if logged in
   _lastActivityTime = Date.now();
 
-  if (_inactivityTimer)     clearTimeout(_inactivityTimer);
-  if (_inactivityWarnTimer) clearTimeout(_inactivityWarnTimer);
-
-  // 1-minute warning before logout
-  _inactivityWarnTimer = setTimeout(() => {
-    if (!_currentUser) return;
-    const anyRunActive = _isRunning === true || _etf_state?.running === true || _bond_state?.running === true;
-    if (!anyRunActive) {
-      showToast('Session expires in 1 minute due to inactivity — move your mouse to stay signed in.', 'warning');
-    }
-  }, SESSION_INACTIVITY_WARN);
-
+  if (_inactivityTimer) clearTimeout(_inactivityTimer);
   _inactivityTimer = setTimeout(() => {
     if (_currentUser) {
       // Check if any screenings are active — don't logout during a run
@@ -3276,7 +3233,7 @@ function _resetInactivityTimer() {
         return;
       }
       // No active runs — proceed with inactivity logout
-      showToast('Session expired due to inactivity. Please sign in again.', 'warning');
+      showToast('⏱️ Session expired due to inactivity. Please sign in again.', 'warning');
       _forceLogout();
     }
   }, SESSION_INACTIVITY_MS);
@@ -3303,10 +3260,8 @@ function _startActivityTracking() {
 
 // Stop tracking when user logs out
 function _stopActivityTracking() {
-  if (_inactivityTimer)     clearTimeout(_inactivityTimer);
-  if (_inactivityWarnTimer) clearTimeout(_inactivityWarnTimer);
-  _inactivityTimer     = null;
-  _inactivityWarnTimer = null;
+  if (_inactivityTimer) clearTimeout(_inactivityTimer);
+  _inactivityTimer = null;
 }
 
 // ── Admin Panel ────────────────────────────────────────────────────
@@ -4262,42 +4217,61 @@ function generateAnalysisHTML(pick, accent) {
     </div>
   `;
 
-  // ── Graham Criteria Section ──────────────────────────────────────────────
-  const grahamCriteria = pick.checklist || [];
+    const grahamCriteria = pick.checklist || [];
+    const buffettCriteria = pick.buffett_checklist || [];
+
+  // ── Graham 8-Criteria Section ──────────────────────────────────────────────
   if (grahamCriteria.length > 0) {
     const gRows = grahamCriteria.map(c => {
-      const st     = (c.status || '').toUpperCase();
-      const isPass = st === 'PASS', isCond = st === 'COND';
-      const rowBg  = isPass ? 'rgba(63,185,80,0.06)'  : isCond ? 'rgba(227,179,65,0.06)'  : 'rgba(248,81,73,0.06)';
-      const rowBdr = isPass ? 'rgba(63,185,80,0.22)'  : isCond ? 'rgba(227,179,65,0.22)'  : 'rgba(248,81,73,0.22)';
-      const lblBg  = isPass ? 'rgba(63,185,80,0.18)'  : isCond ? 'rgba(227,179,65,0.18)'  : 'rgba(248,81,73,0.18)';
-      const lblFg  = isPass ? 'var(--green)'           : isCond ? 'var(--yellow)'           : 'var(--red)';
-      const icon   = isPass ? '\u2713' : isCond ? '~' : '\u2717';
-      return `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:10px 14px;background:${rowBg};border:1px solid ${rowBdr};border-radius:8px;"><div style="min-width:0;flex:1;"><div style="font-size:0.78rem;font-weight:600;color:var(--text);line-height:1.35;">${c.criterion || ''}</div><div style="font-size:0.71rem;color:var(--muted);margin-top:3px;line-height:1.4;">${c.detail || ''}</div></div><span style="flex-shrink:0;display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:5px;font-size:0.68rem;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;background:${lblBg};color:${lblFg};">${icon} ${st === 'COND' ? 'COND' : st}</span></div>`;
+      const st = (c.status || '').toUpperCase();
+      const tagBg    = st === 'PASS' ? '#1a7f37'      : st === 'COND' ? '#9a6700'      : '#b91c1c';
+      const tagColor = '#ffffff';
+      const rowBg    = st === 'PASS' ? 'rgba(63,185,80,0.08)'   : st === 'COND' ? 'rgba(210,153,34,0.1)'   : 'rgba(248,81,73,0.08)';
+      const rowBdr   = st === 'PASS' ? 'rgba(63,185,80,0.25)'   : st === 'COND' ? 'rgba(210,153,34,0.3)'   : 'rgba(248,81,73,0.25)';
+      return `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:${rowBg};border:1px solid ${rowBdr};border-radius:8px;">
+          <div style="min-width:0;flex:1;">
+            <div style="font-size:0.78rem;font-weight:700;color:var(--text);line-height:1.3;">${c.criterion || ''}</div>
+            <div style="font-size:0.71rem;color:var(--muted);margin-top:3px;line-height:1.4;">${c.detail || ''}</div>
+          </div>
+          <span style="flex-shrink:0;display:inline-block;padding:3px 9px;border-radius:5px;font-size:0.68rem;font-weight:800;letter-spacing:0.6px;text-transform:uppercase;background:${tagBg};color:${tagColor};">${st === 'COND' ? 'COND' : st}</span>
+        </div>`;
     }).join('');
-    const gPass = grahamCriteria.filter(c => (c.status||'').toUpperCase() === 'PASS').length;
-    const gCond = grahamCriteria.filter(c => (c.status||'').toUpperCase() === 'COND').length;
-    const gFail = grahamCriteria.filter(c => (c.status||'').toUpperCase() === 'FAIL').length;
-    html += `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:24px 28px;margin-top:24px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;"><div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);">Graham Criteria</div><div style="font-size:0.72rem;color:var(--muted);"><span style="color:var(--green);font-weight:700;">${gPass} PASS</span><span style="margin:0 6px;opacity:0.4;">&middot;</span><span style="color:var(--yellow);font-weight:700;">${gCond} COND</span><span style="margin:0 6px;opacity:0.4;">&middot;</span><span style="color:var(--red);font-weight:700;">${gFail} FAIL</span></div></div><div style="display:flex;flex-direction:column;gap:7px;">${gRows}</div></div>`;
+    html += `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:28px;margin-top:28px;">
+      <div style="font-size:0.75rem;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:20px;">Graham 8-Criteria</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        ${gRows}
+      </div>
+    </div>
+  `;
   }
 
-  // ── Buffett Criteria Section ───────────────────────────────────────────────
-  const buffettCriteria = pick.buffett_checklist || [];
+  // ── Buffett 5-Criteria Section ─────────────────────────────────────────────
   if (buffettCriteria.length > 0) {
     const bRows = buffettCriteria.map(c => {
-      const st     = (c.status || '').toUpperCase();
-      const isPass = st === 'PASS', isCond = st === 'COND';
-      const rowBg  = isPass ? 'rgba(63,185,80,0.06)'  : isCond ? 'rgba(227,179,65,0.06)'  : 'rgba(248,81,73,0.06)';
-      const rowBdr = isPass ? 'rgba(63,185,80,0.22)'  : isCond ? 'rgba(227,179,65,0.22)'  : 'rgba(248,81,73,0.22)';
-      const lblBg  = isPass ? 'rgba(63,185,80,0.18)'  : isCond ? 'rgba(227,179,65,0.18)'  : 'rgba(248,81,73,0.18)';
-      const lblFg  = isPass ? 'var(--green)'           : isCond ? 'var(--yellow)'           : 'var(--red)';
-      const icon   = isPass ? '\u2713' : isCond ? '~' : '\u2717';
-      return `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:10px 14px;background:${rowBg};border:1px solid ${rowBdr};border-radius:8px;"><div style="min-width:0;flex:1;"><div style="font-size:0.78rem;font-weight:600;color:var(--text);line-height:1.35;">${c.criterion || ''}</div><div style="font-size:0.71rem;color:var(--muted);margin-top:3px;line-height:1.4;">${c.detail || ''}</div></div><span style="flex-shrink:0;display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:5px;font-size:0.68rem;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;background:${lblBg};color:${lblFg};">${icon} ${st === 'COND' ? 'COND' : st}</span></div>`;
+      const st = (c.status || '').toUpperCase();
+      const tagBg    = st === 'PASS' ? '#1a7f37'      : st === 'COND' ? '#9a6700'      : '#b91c1c';
+      const tagColor = '#ffffff';
+      const rowBg    = st === 'PASS' ? 'rgba(63,185,80,0.08)'   : st === 'COND' ? 'rgba(210,153,34,0.1)'   : 'rgba(248,81,73,0.08)';
+      const rowBdr   = st === 'PASS' ? 'rgba(63,185,80,0.25)'   : st === 'COND' ? 'rgba(210,153,34,0.3)'   : 'rgba(248,81,73,0.25)';
+      return `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:${rowBg};border:1px solid ${rowBdr};border-radius:8px;">
+          <div style="min-width:0;flex:1;">
+            <div style="font-size:0.78rem;font-weight:700;color:var(--text);line-height:1.3;">${c.criterion || ''}</div>
+            <div style="font-size:0.71rem;color:var(--muted);margin-top:3px;line-height:1.4;">${c.detail || ''}</div>
+          </div>
+          <span style="flex-shrink:0;display:inline-block;padding:3px 9px;border-radius:5px;font-size:0.68rem;font-weight:800;letter-spacing:0.6px;text-transform:uppercase;background:${tagBg};color:${tagColor};">${st === 'COND' ? 'COND' : st}</span>
+        </div>`;
     }).join('');
-    const bPass = buffettCriteria.filter(c => (c.status||'').toUpperCase() === 'PASS').length;
-    const bCond = buffettCriteria.filter(c => (c.status||'').toUpperCase() === 'COND').length;
-    const bFail = buffettCriteria.filter(c => (c.status||'').toUpperCase() === 'FAIL').length;
-    html += `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:24px 28px;margin-top:12px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;"><div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);">Buffett Criteria</div><div style="font-size:0.72rem;color:var(--muted);"><span style="color:var(--green);font-weight:700;">${bPass} PASS</span><span style="margin:0 6px;opacity:0.4;">&middot;</span><span style="color:var(--yellow);font-weight:700;">${bCond} COND</span><span style="margin:0 6px;opacity:0.4;">&middot;</span><span style="color:var(--red);font-weight:700;">${bFail} FAIL</span></div></div><div style="display:flex;flex-direction:column;gap:7px;">${bRows}</div></div>`;
+    html += `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:28px;margin-top:16px;">
+      <div style="font-size:0.75rem;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:20px;">Buffett 5-Criteria</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        ${bRows}
+      </div>
+    </div>
+  `;
   }
 
   // Scores Breakdown Section
@@ -5050,6 +5024,18 @@ function _lockAgentConfig() {
   }
   if (emailDeliveryAddr) { emailDeliveryAddr.disabled = true; emailDeliveryAddr.style.opacity = '0.5'; emailDeliveryAddr.style.cursor = 'not-allowed'; }
   if (emailDeliverySave) { emailDeliverySave.disabled = true; emailDeliverySave.style.opacity = '0.5'; emailDeliverySave.style.cursor = 'not-allowed'; }
+
+  // Lock Settings screen — profile, password, and schedule fields
+  const _sLock = (id) => { const el = document.getElementById(id); if (el) { el.disabled = true; el.style.opacity = '0.5'; el.style.cursor = 'not-allowed'; } };
+  _sLock('settings-name'); _sLock('settings-email');
+  _sLock('settings-save-profile-btn');
+  _sLock('settings-pw1'); _sLock('settings-pw2');
+  _sLock('settings-change-pw-btn');
+  _sLock('settings-sched-hour'); _sLock('settings-sched-min');
+  _sLock('sched-toggle-btn'); _sLock('settings-save-sched-btn');
+  document.querySelectorAll('.sched-day-btn').forEach(b => { b.disabled = true; b.style.opacity = '0.45'; b.style.cursor = 'not-allowed'; });
+  const settingsBanner = document.getElementById('settings-run-lock-banner');
+  if (settingsBanner) settingsBanner.style.display = 'flex';
 }
 
 function _unlockAgentConfig() {
@@ -5114,6 +5100,18 @@ function _unlockAgentConfig() {
   }
   if (emailDeliveryAddr) { emailDeliveryAddr.disabled = false; emailDeliveryAddr.style.opacity = '1'; emailDeliveryAddr.style.cursor = ''; }
   if (emailDeliverySave) { emailDeliverySave.disabled = false; emailDeliverySave.style.opacity = '1'; emailDeliverySave.style.cursor = 'pointer'; }
+
+  // Unlock Settings screen — profile, password, and schedule fields
+  const _sUnlock = (id) => { const el = document.getElementById(id); if (el) { el.disabled = false; el.style.opacity = '1'; el.style.cursor = ''; } };
+  _sUnlock('settings-name'); _sUnlock('settings-email');
+  _sUnlock('settings-save-profile-btn');
+  _sUnlock('settings-pw1'); _sUnlock('settings-pw2');
+  _sUnlock('settings-change-pw-btn');
+  _sUnlock('settings-sched-hour'); _sUnlock('settings-sched-min');
+  _sUnlock('sched-toggle-btn'); _sUnlock('settings-save-sched-btn');
+  document.querySelectorAll('.sched-day-btn').forEach(b => { b.disabled = false; b.style.opacity = '1'; b.style.cursor = 'pointer'; });
+  const settingsBanner = document.getElementById('settings-run-lock-banner');
+  if (settingsBanner) settingsBanner.style.display = 'none';
 }
 
 // ── Helper: Handle daily run limit errors ───────────────────────────
@@ -6707,6 +6705,7 @@ async function _showSettingsScreen() {
 }
 
 async function saveSettingsProfile() {
+  if (_isRunning || _scheduledRunActive) { showToast('Settings are locked while a screen run is in progress', 'warning', 3000); return; }
   const name  = (document.getElementById('settings-name')?.value  || '').trim();
   const email = (document.getElementById('settings-email')?.value || '').trim();
   if (!name && !email) { showToast('Enter a name or email to save', 'warning'); return; }
@@ -6726,6 +6725,7 @@ async function saveSettingsProfile() {
 }
 
 async function saveSettingsPassword() {
+  if (_isRunning || _scheduledRunActive) { showToast('Settings are locked while a screen run is in progress', 'warning', 3000); return; }
   const pw1 = document.getElementById('settings-pw1')?.value || '';
   const pw2 = document.getElementById('settings-pw2')?.value || '';
   if (!pw1) { showToast('Enter a new password', 'warning'); return; }
@@ -6756,6 +6756,7 @@ function toggleScheduleState() {
 }
 
 async function saveSchedule() {
+  if (_isRunning || _scheduledRunActive) { showToast('Settings are locked while a screen run is in progress', 'warning', 3000); return; }
   const hourEl = document.getElementById('settings-sched-hour');
   const minEl = document.getElementById('settings-sched-min');
   const toggleBtn = document.getElementById('sched-toggle-btn');
@@ -6765,10 +6766,8 @@ async function saveSchedule() {
     return;
   }
 
-  // Use explicit empty-string check instead of || so that hour=0 (midnight)
-  // is never treated as falsy and silently replaced by the default of 18.
-  const hour = hourEl.value !== '' ? parseInt(hourEl.value, 10) : parseInt(hourEl.placeholder || 18, 10);
-  const min  = minEl.value  !== '' ? parseInt(minEl.value,  10) : parseInt(minEl.placeholder  || 0,  10);
+  const hour = parseInt(hourEl.value) || parseInt(hourEl.placeholder || 18);
+  const min = parseInt(minEl.value) || parseInt(minEl.placeholder || 0);
   const enabled = toggleBtn?.classList.contains('on') ?? true;
 
   if (isNaN(hour) || hour < 0 || hour > 23) { showToast('Enter a valid hour (0–23)', 'error'); return; }
@@ -6914,8 +6913,8 @@ async function _openSettingsModal() {
 
       <div style="padding-top:14px;border-top:1px solid var(--border);font-size:.8rem;color:var(--muted);line-height:1.6">
         <div style="margin-bottom:10px"><strong>Session Security:</strong></div>
-        <div>• Automatic sign-out after <strong>15 minutes of inactivity</strong></div>
-        <div>• Session tokens expire after <strong>115 minutes</strong> of last activity</div>
+        <div>• Automatic sign-out after <strong>5 minutes of inactivity</strong></div>
+        <div>• Session tokens expire after <strong>15 minutes</strong> of last activity</div>
         <div>• All sessions are encrypted and logged</div>
       </div>
     </div>
@@ -7097,7 +7096,7 @@ function _badgeHtml(status) {
 _restoreSession();
 
 // NOTE: No beforeunload auto-logout — page refresh would incorrectly sign users out.
-// Access tokens expire naturally after 115 minutes; the refresh token handles re-auth.
+// Access tokens expire naturally after 15 minutes; the refresh token handles re-auth.
 </script>
 </body>
 </html>
