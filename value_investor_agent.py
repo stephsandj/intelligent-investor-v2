@@ -1400,7 +1400,8 @@ class IntelligentInvestorPDFGenerator:
         if run_date is None:
             run_date = datetime.now(_TZ_EST)
         date_str  = run_date.strftime('%B %-d, %Y')
-        batch_lbl = f"Daily Screen  —  {run_date.strftime('%b %-d, %Y')}"
+        time_str  = run_date.strftime('%H:%M:%S')
+        batch_lbl = f"Daily Screen  —  {run_date.strftime('%b %-d, %Y')} {time_str}"
 
         # Always resolve to an absolute path so the PDF is written to the
         # correct output folder regardless of the process CWD.
@@ -2461,6 +2462,8 @@ def send_email_confirmation(
         run_date = datetime.now(_TZ_EST)
 
     date_str = run_date.strftime('%B %-d, %Y')
+    time_str = run_date.strftime('%H:%M:%S')
+    date_time_str = f"{date_str} {time_str}"
     n = len(stocks)
 
     # Human-readable period label
@@ -2478,7 +2481,7 @@ def send_email_confirmation(
 
     # Build email body
     lines = [
-        f"Intelligent Investor Screen — {date_str}",
+        f"Intelligent Investor Screen — {date_time_str}",
         f"{'=' * 55}",
         f"",
         f"Agent run completed at {run_date.strftime('%H:%M:%S')}.",
@@ -2517,7 +2520,7 @@ def send_email_confirmation(
         msg = MIMEMultipart()
         msg['From']    = EMAIL_FROM
         msg['To']      = email_to
-        msg['Subject'] = f"Intelligent Investor Screen — {date_str} — {n} picks"
+        msg['Subject'] = f"Intelligent Investor Screen — {date_time_str} — {n} picks"
         msg.attach(MIMEText(body, 'plain'))
 
         # Attach PDF if it exists
