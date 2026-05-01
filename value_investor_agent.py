@@ -1399,8 +1399,8 @@ class IntelligentInvestorPDFGenerator:
                         run_date: datetime = None) -> str:
         if run_date is None:
             run_date = datetime.now(_TZ_EST)
-        date_str  = run_date.strftime('%B %-d, %Y')
         time_str  = run_date.strftime('%H:%M:%S')
+        date_str  = f"{run_date.strftime('%B %-d, %Y')}  {time_str}"
         batch_lbl = f"Daily Screen  —  {run_date.strftime('%b %-d, %Y')} {time_str}"
 
         # Always resolve to an absolute path so the PDF is written to the
