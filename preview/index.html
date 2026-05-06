@@ -1282,13 +1282,11 @@
       </ul>
       <p>We do <strong>not</strong> sell, rent, or trade your personal information to third parties for marketing purposes.</p>
       <h3>4. Data Storage and Security</h3>
-      <p>Your data is stored in a PostgreSQL database. Passwords are hashed using bcrypt before storage. Authentication is managed via JWT tokens with short expiration windows. We use HTTPS/TLS encryption for all data in transit.</p>
+      <p>Your passwords is hashed using bcrypt before storage stored in a database.</p>
       <h3>5. Third-Party Service Providers</h3>
       <ul>
         <li><strong>Stripe, Inc.</strong> — Payment processing. Subject to Stripe's own Privacy Policy.</li>
-        <li><strong>Google (Gmail SMTP)</strong> — Transactional email delivery.</li>
-        <li><strong>Yahoo Finance / yfinance</strong> — Market data provider. No personal data is shared.</li>
-        <li><strong>Financial Modeling Prep (FMP)</strong> — Fundamental data provider. No personal data is shared.</li>
+        <li><strong>Google</strong> — Transactional email delivery.</li>
       </ul>
       <h3>6. Cookies and Local Storage</h3>
       <p>We use <strong>HttpOnly cookies</strong> to store authentication tokens securely. We use <strong>localStorage</strong> and <strong>sessionStorage</strong> in your browser to persist UI state. We do not use advertising cookies or third-party tracking cookies.</p>
@@ -4044,7 +4042,7 @@ function showSampleReport() {
        <li><strong style="color:var(--text)">Full Metric Tables</strong> — P/E, P/B, ROE, FCF, D/E</li>
        <li><strong style="color:var(--text)">Risk Flags</strong> — value trap warnings</li>
      </ul>
-     <p style="margin-top:14px;font-size:.8rem;color:var(--muted)">Reports are generated daily at 6 PM and delivered to your email.</p>`,
+     <p style="margin-top:14px;font-size:.8rem;color:var(--muted)">Reports are generated daily and delivered to your email at your convenient time.</p>`,
     [
       { label: 'Start Free Trial — Get Full Reports', cls: 'btn-orange', action: () => { closeModal(); showAuthModal('register'); } },
       { label: 'Close', cls: 'btn-gray', action: closeModal },
