@@ -7,9 +7,12 @@ g.admin_id / g.admin is set by admin_portal_required before each handler runs.
 """
 
 import secrets
+import logging
 from datetime import datetime, timezone, timedelta
 
 from flask import Blueprint, g, jsonify, request, make_response
+
+logger = logging.getLogger("admin_routes")
 
 from auth import admin_portal_required, hash_password, check_password, generate_admin_token, decode_token, clear_admin_session
 from models import (
@@ -73,6 +76,12 @@ def _parse_json_body(*required_fields):
 
 def _utcnow() -> datetime:
     return datetime.now(tz=timezone.utc)
+
+
+def _handle_exception(exc: Exception, action: str, logger_obj) -> tuple:
+    """Log exception details server-side, return generic error to client."""
+    logger_obj.error(f"{action} failed: {type(exc).__name__}: {str(exc)}", exc_info=True)
+    return jsonify({"error": "An error occurred. Please try again."}), 500
 
 
 # ---------------------------------------------------------------------------
@@ -469,25 +478,28 @@ def api_create_user():
     should_verify = bool(data.get("verify_email", False))
 
     if not email or "@" not in email:
-        return jsonify({"error": "A valid email address is required"}), 422
+        return jsonify({"error": "Invalid input"}), 422
     if len(password) < 8:
         password = secrets.token_urlsafe(16)
 
     if get_user_by_email(email):
-        return jsonify({"error": "An account with that email already exists"}), 409
+        # Don't leak that email exists (user enumeration protection)
+        logger.warning(f"Admin {g.admin_id} attempted to create duplicate user: {email}")
+        return jsonify({"error": "Invalid input"}), 422
 
     try:
         pw_hash = hash_password(password)
         user = create_user(email, pw_hash, full_name)
     except Exception as exc:
-        return jsonify({"error": f"Failed to create user: {exc}"}), 500
+        return _handle_exception(exc, "create_user", logger)
 
     user_id = str(user["id"])
     try:
         trial_ends_at = _utcnow() + timedelta(days=7) if plan_id == 1 else None
         create_subscription(user_id=user_id, plan_id=plan_id, status=status, trial_ends_at=trial_ends_at)
     except Exception as exc:
-        return jsonify({"error": f"User created but subscription failed: {exc}"}), 207
+        logger.error(f"Subscription creation failed for user {user_id}: {type(exc).__name__}: {str(exc)}", exc_info=True)
+        return jsonify({"error": "User created but subscription setup failed"}), 207
 
     if should_verify:
         try:

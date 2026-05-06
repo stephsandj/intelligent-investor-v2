@@ -1289,32 +1289,35 @@ def refresh():
     if not models.get_user_by_id(user_id):
         return jsonify({"error": "User not found"}), 401
 
-    # ── Rotation check ────────────────────────────────────────────────
+    # ── Rotation check (defense-in-depth token rotation verification) ────────────────────────
     incoming_hash = _hash_token(refresh_token)
     try:
-        valid = models.verify_and_rotate_refresh_token(user_id, incoming_hash)
+        rotation_result = models.verify_and_rotate_refresh_token(user_id, incoming_hash)
     except Exception as exc:
         logger.error("refresh: rotation DB check failed for %s: %s", user_id, exc)
         return jsonify({"error": "Session verification failed — please sign in again", "code": "db_error"}), 401
 
-    if not valid:
-        # Token already rotated — possible replay/theft. Clear stored hash so
-        # all subsequent refresh attempts also fail until the user re-logs in.
+    if not rotation_result.get("valid"):
+        # Token invalid: either already rotated (theft attempt) or wrong token
         try:
-            models.store_refresh_token_hash(user_id, "")
+            models.store_refresh_token_hash(user_id, "")  # Invalidate any remaining tokens
         except Exception:
             pass
         logger.warning(
-            "refresh: rotated-token reuse detected for user %s (possible token theft) "
+            "refresh: invalid refresh token for user %s (possible token theft) "
             "— session invalidated", user_id[:8]
         )
         models.log_audit(
             user_id=user_id,
-            action="refresh_token_reuse_detected",
-            details_dict={"note": "Rotated refresh token reused — session invalidated"},
+            action="refresh_token_invalid",
+            details_dict={"note": "Invalid/reused refresh token — session invalidated"},
             ip_address=_get_client_ip(),
         )
-        return jsonify({"error": "Session invalid — please sign in again", "code": "token_reused"}), 401
+        return jsonify({"error": "Session invalid — please sign in again", "code": "token_invalid"}), 401
+
+    # Token is valid — proceed with rotation
+    if rotation_result.get("rotated"):
+        logger.debug("refresh: token successfully rotated for user %s", user_id[:8])
 
     # ── Issue new token pair ──────────────────────────────────────────
     new_tokens = generate_tokens(user_id)

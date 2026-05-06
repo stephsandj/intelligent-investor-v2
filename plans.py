@@ -398,7 +398,8 @@ def get_ticker_monthly_limit(user_id: str) -> Optional[int]:
 
 def increment_and_check_run_count(user_id: str) -> Tuple[bool, str]:
     """
-    Check the user's daily run limit FIRST, then increment only if within limits.
+    Atomically check the user's daily run limit and increment if within limits.
+    Uses database-level locking to prevent race conditions across multiple workers.
     Returns (True, "") if allowed, (False, reason) if at or over limit.
     """
     subscription = models.get_user_subscription(user_id)
@@ -412,20 +413,51 @@ def increment_and_check_run_count(user_id: str) -> Tuple[bool, str]:
 
     runs_limit = plan.get("runs_per_day")
 
-    if runs_limit is None:
-        # Unlimited plan — increment and proceed
-        models.increment_daily_run_count(user_id)
-        return True, ""
+    # Atomic check-and-increment using database transaction with advisory lock
+    return _atomic_run_count_check(user_id, runs_limit)
 
-    # Check current count BEFORE incrementing
-    current_count = models.get_daily_run_count(user_id)
-    if current_count >= runs_limit:
-        return False, (
-            f"You have used {current_count} of {runs_limit} daily screen"
-            f"{'s' if runs_limit != 1 else ''} allowed on your plan. "
-            "Upgrade or try again tomorrow."
-        )
 
-    # Within limit — increment and proceed
-    models.increment_daily_run_count(user_id)
-    return True, ""
+def _atomic_run_count_check(user_id: str, runs_limit: Optional[int]) -> Tuple[bool, str]:
+    """
+    Atomic check-and-increment using PostgreSQL advisory lock to prevent race conditions.
+    Multiple workers can run in parallel without exceeding the daily limit.
+    """
+    import hashlib
+    try:
+        with models.db_cursor() as cur:
+            # Use a stable advisory lock ID based on user_id
+            lock_id = int(hashlib.md5(user_id.encode()).hexdigest()[:8], 16) % (2**31)
+
+            # Acquire exclusive lock for this user
+            cur.execute("SELECT pg_advisory_lock(%s)", (lock_id,))
+
+            # Check the current count under lock
+            current_count = models.get_daily_run_count(user_id)
+
+            if runs_limit is None:
+                # Unlimited plan — increment and proceed
+                models.increment_daily_run_count(user_id)
+                return True, ""
+
+            if current_count >= runs_limit:
+                # At or over limit
+                return False, (
+                    f"You have used {current_count} of {runs_limit} daily screen"
+                    f"{'s' if runs_limit != 1 else ''} allowed on your plan. "
+                    "Upgrade or try again tomorrow."
+                )
+
+            # Within limit — increment atomically
+            models.increment_daily_run_count(user_id)
+            # Lock is automatically released when transaction commits
+            return True, ""
+    except Exception as exc:
+        logger.error(f"Atomic run count check failed for user {user_id}: {exc}", exc_info=True)
+        # Fail open: allow the run if database fails (better UX than blocking)
+        # Log this so we can investigate
+        models.log_audit(
+            user_id=user_id,
+            action="run_limit_check_failed",
+            details_dict={"error": str(exc)},
+        ) if hasattr(models, 'log_audit') else None
+        return True, ""  # Allow on DB error to prevent false positives

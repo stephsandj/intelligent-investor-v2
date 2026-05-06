@@ -125,6 +125,7 @@ CREATE TABLE IF NOT EXISTS users (
     timezone VARCHAR(64) NOT NULL DEFAULT 'UTC',
     email_verified BOOLEAN NOT NULL DEFAULT FALSE,
     email_verify_token VARCHAR(128),
+    email_verify_token_expires TIMESTAMPTZ,
     reset_token VARCHAR(128),
     reset_token_expires TIMESTAMPTZ,
     is_admin BOOLEAN NOT NULL DEFAULT FALSE,
@@ -421,29 +422,36 @@ def update_user_last_login(user_id: str, ip: Optional[str] = None):
 
 
 def verify_user_email(user_id: str):
-    """Mark email as verified and clear the one-time verify token."""
+    """Mark email as verified and clear the one-time verify token and expiration."""
     with db_cursor() as cur:
         cur.execute(
-            "UPDATE users SET email_verified = TRUE, email_verify_token = NULL WHERE id = %s",
+            "UPDATE users SET email_verified = TRUE, email_verify_token = NULL, email_verify_token_expires = NULL WHERE id = %s",
             (user_id,),
         )
 
 
 def set_email_verify_token(user_id: str, token: str) -> None:
-    """Store a one-time email verification token for the user."""
+    """Store a one-time email verification token (hashed) with 24-hour expiration."""
+    import hashlib
+    from datetime import datetime, timedelta, timezone
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    expires_at = datetime.now(tz=timezone.utc) + timedelta(hours=24)
     with db_cursor() as cur:
         cur.execute(
-            "UPDATE users SET email_verify_token = %s WHERE id = %s",
-            (token, user_id),
+            "UPDATE users SET email_verify_token = %s, email_verify_token_expires = %s WHERE id = %s",
+            (token_hash, expires_at, user_id),
         )
 
 
 def get_user_by_verify_token(token: str) -> Optional[Dict[str, Any]]:
-    """Look up a user by their one-time email verification token."""
+    """Look up a user by their one-time email verification token (hashed, non-expired)."""
+    import hashlib
+    from datetime import datetime, timezone
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
     with db_cursor(commit=False) as cur:
         cur.execute(
-            "SELECT * FROM users WHERE email_verify_token = %s",
-            (token,),
+            "SELECT * FROM users WHERE email_verify_token = %s AND email_verify_token_expires > NOW()",
+            (token_hash,),
         )
         return _row_to_dict(cur.fetchone())
 
@@ -487,11 +495,11 @@ def store_refresh_token_hash(user_id: str, token_hash: str) -> None:
         )
 
 
-def verify_and_rotate_refresh_token(user_id: str, incoming_hash: str) -> bool:
+def verify_and_rotate_refresh_token(user_id: str, incoming_hash: str) -> dict:
     """
-    Return True if incoming_hash matches the stored hash, then clear it so the
-    same token can never be reused (rotation).  Returns False on mismatch —
-    which may indicate token theft; callers should invalidate the session.
+    Verify refresh token rotation and return detailed status.
+    Returns dict with 'valid' (bool) and 'rotated' (bool) keys.
+    'valid'=True means token can be used; 'rotated'=True means old token was cleared.
     """
     with db_cursor() as cur:
         cur.execute(
@@ -499,18 +507,28 @@ def verify_and_rotate_refresh_token(user_id: str, incoming_hash: str) -> bool:
             (user_id,),
         )
         row = cur.fetchone()
-        if not row or not row["refresh_token_hash"]:
-            # No hash stored yet (legacy session pre-rotation) — accept once
-            # and let the caller store a new hash going forward.
-            return True
-        if row["refresh_token_hash"] != incoming_hash:
-            return False
-        # Clear immediately so the same token cannot be reused
+
+        if not row:
+            # User not found
+            return {"valid": False, "rotated": False}
+
+        stored_hash = row["refresh_token_hash"] if row else None
+
+        if not stored_hash:
+            # No hash stored yet (legacy session pre-rotation or first login)
+            # Accept but don't mark as rotated (caller must store new hash)
+            return {"valid": True, "rotated": False}
+
+        if stored_hash != incoming_hash:
+            # Hash mismatch = either wrong token or already-rotated (token theft attempt)
+            return {"valid": False, "rotated": False}
+
+        # Hash matches — clear it immediately so token cannot be reused
         cur.execute(
             "UPDATE users SET refresh_token_hash = NULL WHERE id = %s",
             (user_id,),
         )
-        return True
+        return {"valid": True, "rotated": True}
 
 
 def update_user_profile(user_id: str, full_name: Optional[str] = None, email: Optional[str] = None) -> None:

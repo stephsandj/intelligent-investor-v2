@@ -36,7 +36,7 @@ _load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. Standard library & auto-installs
 # ─────────────────────────────────────────────────────────────────────────────
-import glob, re, json, signal, subprocess, threading, logging
+import glob, re, json, signal, subprocess, threading, logging, uuid
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 _TZ_EST = ZoneInfo("America/New_York")  # All user-facing times in Eastern
@@ -121,7 +121,15 @@ PORT       = int(os.environ.get("PORT", 5050))
 # Every user gets their own isolated subdirectory under AGENT_DIR/users/{user_id}/
 # so that one user's screen runs, picks, PDFs, and logs never touch another's.
 
+def _validate_user_id(user_id: str) -> None:
+    """Validate user_id is a valid UUID to prevent path traversal attacks."""
+    try:
+        uuid.UUID(user_id)
+    except (ValueError, AttributeError, TypeError):
+        raise ValueError(f"Invalid user_id format: expected UUID, got {repr(user_id)}")
+
 def _user_data_dir(user_id: str) -> str:
+    _validate_user_id(user_id)  # Prevent path traversal
     path = os.path.join(AGENT_DIR, "users", str(user_id))
     os.makedirs(path, exist_ok=True)
     return path
