@@ -722,9 +722,23 @@ def _extract_token_from_request() -> Optional[str]:
 
 
 def _get_client_ip() -> Optional[str]:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    """Get client IP, validating X-Forwarded-For only from trusted proxies."""
+    # Cloudflare header takes precedence
+    if request.headers.get("CF-Connecting-IP"):
+        return request.headers.get("CF-Connecting-IP")
+
+    # Only trust X-Forwarded-For if from known reverse proxy (Traefik in Docker)
+    # Traefik connects from docker network (172.17.x.x)
+    if request.remote_addr and request.remote_addr.startswith("172.17."):
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            # Take first IP (original client), log if multiple hops (spoofing attempt)
+            ips = [ip.strip() for ip in forwarded.split(",")]
+            if len(ips) > 1:
+                logger.warning("Suspicious X-Forwarded-For with multiple hops: %s", forwarded)
+            return ips[0]
+
+    # Fallback to direct connection IP
     return request.remote_addr
 
 
@@ -998,9 +1012,10 @@ def login():
 
     ip = _get_client_ip()
 
-    # Check if IP is rate limited (disabled - using database-based account lockout instead)
-    # if not _check_rate_limit(ip or "unknown"):
-    #     return jsonify({"error": "Too many login attempts. Please wait 15 minutes."}), 429
+    # Check if IP is rate limited (defense-in-depth: IP limit + database-based account lockout)
+    if not _check_rate_limit(ip or "unknown"):
+        logger.warning("Login rate limit exceeded for IP: %s", ip or "unknown")
+        return jsonify({"error": "Too many login attempts. Please wait 15 minutes."}), 429
 
     # Check if account is locked due to failed attempts
     if models.is_account_locked(email, max_attempts=5, lockout_minutes=5):

@@ -253,14 +253,17 @@ _CSRF_ALLOWED_ORIGIN = os.environ.get("APP_BASE_URL", "").rstrip("/")
 def _csrf_origin_check():
     if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
         return
-    if not _CSRF_ALLOWED_ORIGIN:
-        return  # unconfigured dev mode — skip
     origin = request.headers.get("Origin", "").rstrip("/")
-    if not origin:
-        return  # no Origin header present — nothing to validate
-    if origin != _CSRF_ALLOWED_ORIGIN:
+    allowed = _CSRF_ALLOWED_ORIGIN or ""
+
+    # Fail-closed: require valid origin or deny
+    if not origin and not allowed:
+        logger.warning("CSRF check: Origin header missing AND APP_BASE_URL unset (fail-closed)")
+        return jsonify({"error": "Forbidden", "code": "invalid_origin"}), 403
+
+    if origin and allowed and origin != allowed:
         logger.warning("CSRF origin mismatch: expected %s got %s path=%s",
-                       _CSRF_ALLOWED_ORIGIN, origin, request.path)
+                       allowed, origin, request.path)
         return jsonify({"error": "Forbidden", "code": "invalid_origin"}), 403
 
 
@@ -1265,7 +1268,9 @@ def _run_ticker_research(user_id: str, symbol: str):
         if cancel_ev.is_set():
             return
 
-        fmp_key = os.environ.get("FMP_API_KEY", "0WKipAzrA4SUELMLzImM8EkYuyE3jYgB")
+        fmp_key = os.environ.get("FMP_API_KEY")
+        if not fmp_key:
+            raise ValueError("FMP_API_KEY environment variable is required")
         fmp_client = via.FMPClient(fmp_key)
         analyzer   = via.ValueInvestingAnalyzer(fmp_client)
 
