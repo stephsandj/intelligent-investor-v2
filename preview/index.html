@@ -47,17 +47,16 @@
 
   /* ── Screener estimate message ── */
   .screener-estimate-msg {
-    position: absolute; top: 100%; left: 0; right: 0; margin-top: 6px;
-    background: rgba(63, 185, 80, 0.15); border: 1px solid rgba(63, 185, 80, 0.4);
-    border-radius: 8px; padding: 8px 12px; font-size: 0.8rem; color: var(--green);
-    font-weight: 600; white-space: nowrap; text-align: center;
+    display: inline-flex; align-items: center; margin-left: 8px;
+    padding: 5px 12px; border-radius: 6px; font-size: 0.78rem;
+    color: var(--green); font-weight: 600; white-space: nowrap;
+    background: rgba(63, 185, 80, 0.12); border: 1px solid rgba(63, 185, 80, 0.3);
     animation: fadeEstimate 3s ease forwards;
-    z-index: 10;
   }
   @keyframes fadeEstimate {
-    0% { opacity: 1; transform: translateY(-4px); }
+    0% { opacity: 1; }
     85% { opacity: 1; }
-    100% { opacity: 0; transform: translateY(-8px); }
+    100% { opacity: 0; }
   }
 
   /* ── Modal ── */
@@ -5257,19 +5256,20 @@ function _estimateRunTime() {
 
 // ── Show estimate message for 3 seconds ──
 function _showRunEstimate(estimate) {
-  const statusPill = document.getElementById('stock-status-pill');
-  if (!statusPill) return;
+  const countdownBadge = document.getElementById('stocks-countdown');
+  if (!countdownBadge) return;
 
   // Remove any existing estimate message
-  const existing = statusPill.querySelector('.screener-estimate-msg');
-  if (existing) existing.remove();
+  const existing = countdownBadge.nextElementSibling;
+  if (existing && existing.classList.contains('screener-estimate-msg')) {
+    existing.remove();
+  }
 
-  // Create and insert new estimate message
-  const msg = document.createElement('div');
+  // Create and insert new estimate message next to countdown badge
+  const msg = document.createElement('span');
   msg.className = 'screener-estimate-msg';
-  msg.textContent = '📊 Estimated: ' + estimate;
-  statusPill.parentElement.style.position = 'relative'; // Ensure parent is positioned
-  statusPill.appendChild(msg);
+  msg.textContent = 'Estimated: ' + estimate;
+  countdownBadge.parentElement.insertBefore(msg, countdownBadge.nextSibling);
 
   // Auto-remove after 3 seconds
   setTimeout(() => {
