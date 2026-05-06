@@ -45,6 +45,21 @@
   @keyframes slideIn { from{transform:translateX(60px);opacity:0} to{transform:translateX(0);opacity:1} }
   @keyframes fadeOut { to{opacity:0;transform:translateY(8px)} }
 
+  /* ── Screener estimate message ── */
+  .screener-estimate-msg {
+    position: absolute; top: 100%; left: 0; right: 0; margin-top: 6px;
+    background: rgba(63, 185, 80, 0.15); border: 1px solid rgba(63, 185, 80, 0.4);
+    border-radius: 8px; padding: 8px 12px; font-size: 0.8rem; color: var(--green);
+    font-weight: 600; white-space: nowrap; text-align: center;
+    animation: fadeEstimate 3s ease forwards;
+    z-index: 10;
+  }
+  @keyframes fadeEstimate {
+    0% { opacity: 1; transform: translateY(-4px); }
+    85% { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-8px); }
+  }
+
   /* ── Modal ── */
   .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.65); z-index:500; display:none; align-items:center; justify-content:center; }
   .modal-overlay.open { display:flex; }
@@ -5169,6 +5184,101 @@ function checkSubscriptionExpired() {
   return false;
 }
 
+// ── Calculate and display estimated run time ──
+function _estimateRunTime() {
+  // Get configuration
+  const cfgPeriodEl = document.querySelector('input[name="cfg-period"]:checked');
+  const loserPeriod = cfgPeriodEl?.value || 'daily100';
+  const markets = Array.from(document.querySelectorAll('.market-chip.active')).map(el => el.dataset.market) || _cfgMarkets || [];
+  const pdfEnabled = document.getElementById('cfg-pdf')?.checked || false;
+  const emailEnabled = document.getElementById('cfg-email')?.checked || false;
+
+  // Determine stock count multiplier based on criteria
+  let baseCriteria = loserPeriod;
+  let isAllStocks = baseCriteria.includes('All') || baseCriteria === 'all_losers' || baseCriteria === 'all_value';
+  let isTop500 = baseCriteria.includes('500') || baseCriteria === 'top500';
+  let isTop100 = baseCriteria.includes('100') || baseCriteria === 'top100' || baseCriteria === 'daily100' || baseCriteria === 'weekly100' || baseCriteria === '52week100';
+
+  // Stock count estimation
+  let baseStockCount = 100;
+  if (isAllStocks) {
+    baseStockCount = 4500; // 3500-5000 range average
+  } else if (isTop500) {
+    baseStockCount = 500;
+  } else if (isTop100) {
+    baseStockCount = 100;
+  }
+
+  // Market multiplier
+  const marketCount = Math.max(1, markets.length);
+
+  // Total stocks to analyze
+  const totalStocks = baseStockCount * marketCount;
+
+  // Time calculation (in seconds)
+  let estSeconds = 20; // Base API + setup overhead
+
+  // Per-stock processing: 300-500ms per stock, use 350ms average
+  estSeconds += (totalStocks * 0.35);
+
+  // PDF generation (if enabled)
+  if (pdfEnabled) {
+    if (isAllStocks) {
+      estSeconds += 12; // 10-15s for large PDFs
+    } else if (isTop500) {
+      estSeconds += 8;  // 8-10s for 500
+    } else {
+      estSeconds += 3;  // 1-3s for 100
+    }
+  }
+
+  // Email sending (if enabled)
+  if (emailEnabled) {
+    estSeconds += 2;
+  }
+
+  // Convert to minutes with buffer (round up)
+  const estMinutes = Math.ceil(estSeconds / 60);
+
+  // Return human-readable estimate with range
+  let estimate = '';
+  if (estMinutes === 0) {
+    estimate = '< 1 minute';
+  } else if (estMinutes === 1) {
+    estimate = '1-2 minutes';
+  } else if (estMinutes <= 3) {
+    estimate = estMinutes + '-' + (estMinutes + 1) + ' minutes';
+  } else {
+    estimate = estMinutes + '-' + (estMinutes + 2) + ' minutes';
+  }
+
+  return estimate;
+}
+
+// ── Show estimate message for 3 seconds ──
+function _showRunEstimate(estimate) {
+  const statusPill = document.getElementById('stock-status-pill');
+  if (!statusPill) return;
+
+  // Remove any existing estimate message
+  const existing = statusPill.querySelector('.screener-estimate-msg');
+  if (existing) existing.remove();
+
+  // Create and insert new estimate message
+  const msg = document.createElement('div');
+  msg.className = 'screener-estimate-msg';
+  msg.textContent = '📊 Estimated: ' + estimate;
+  statusPill.parentElement.style.position = 'relative'; // Ensure parent is positioned
+  statusPill.appendChild(msg);
+
+  // Auto-remove after 3 seconds
+  setTimeout(() => {
+    if (msg && msg.parentElement) {
+      msg.remove();
+    }
+  }, 3300);
+}
+
 async function startRun() {
   if (checkSubscriptionExpired()) return;
   if (_isRunning) return;
@@ -5277,6 +5387,10 @@ async function startRun() {
     _startAgentLogUpdates();
   }
   _advanceStep('stock', 0, '5%');
+
+  // ── Show estimated run time for 3 seconds ──
+  const estimate = _estimateRunTime();
+  _showRunEstimate(estimate);
 
   // ── Clear any existing timers — progress now driven by log parsing ────────
   _stockStepTimers.forEach(clearTimeout);
