@@ -49,9 +49,19 @@ def _jwt_secret() -> str:
     return secret
 
 
-JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
+JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 15
 REFRESH_TOKEN_EXPIRE_DAYS = 14  # 30→14 days — industry standard for financial SaaS
+
+# ---------------------------------------------------------------------------
+# Admin session idle tracking (in-memory; restart forces re-login anyway)
+# ---------------------------------------------------------------------------
+_admin_last_activity: Dict[str, float] = {}
+ADMIN_IDLE_TIMEOUT_SECS = 15 * 60  # must match JS INACTIVITY_MS
+
+def clear_admin_session(admin_id: str) -> None:
+    """Remove admin idle-tracking entry — call on logout."""
+    _admin_last_activity.pop(admin_id, None)
 
 # ---------------------------------------------------------------------------
 # Password helpers
@@ -812,6 +822,14 @@ def admin_portal_required(fn):
         if not admin:
             return jsonify({"error": "Admin account not found or inactive", "code": "admin_not_found"}), 401
 
+        # Server-side idle timeout — enforces the 15-min inactivity limit regardless of JS state
+        now = _time.time()
+        last = _admin_last_activity.get(admin_id)
+        if last is not None and (now - last) > ADMIN_IDLE_TIMEOUT_SECS:
+            _admin_last_activity.pop(admin_id, None)
+            return jsonify({"error": "Session expired due to inactivity — please log in again", "code": "idle_timeout"}), 401
+        _admin_last_activity[admin_id] = now
+
         g.admin_id = admin_id
         g.admin = admin
         return fn(*args, **kwargs)
@@ -1085,8 +1103,8 @@ def logout():
             pass  # expired or invalid token — nothing to invalidate
 
     response = jsonify({"ok": True})
-    response.delete_cookie("access_token",  path="/", samesite="Lax")
-    response.delete_cookie("refresh_token", path="/", samesite="Lax")
+    response.delete_cookie("access_token",  path="/", samesite="Lax", secure=True)
+    response.delete_cookie("refresh_token", path="/", samesite="Lax", secure=True)
     return response
 
 

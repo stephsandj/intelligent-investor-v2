@@ -206,29 +206,63 @@ def _security_headers(response):
         "max-age=31536000; includeSubDomains",
     )
 
-    # CSP — restrict resource origins; 'unsafe-inline' is required for the
-    # single-file SPA (all JS/CSS is inline). Stripe needs its own origins
-    # for the payment widget and 3-D Secure iframe.
-    response.headers.setdefault(
-        "Content-Security-Policy",
-        (
-            "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://js.stripe.com; "
-            "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: https:; "
-            "connect-src 'self' https://api.stripe.com; "
-            "frame-src https://js.stripe.com; "
-            "font-src 'self' data:; "
-            "object-src 'none'; "
-            "base-uri 'self'; "
-            "form-action 'self';"
-        ),
-    )
-
-    # Allow same-origin framing for admin panel only
+    # Admin panel has no inline scripts/styles — apply strict CSP with no unsafe-inline.
+    # Main SPA still uses unsafe-inline (index.html has 135 inline handlers; tracked as TODO).
     if request.path.startswith("/admin"):
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            (
+                "default-src 'self'; "
+                "script-src 'self' https://js.stripe.com; "
+                "style-src 'self'; "
+                "img-src 'self' data: https:; "
+                "connect-src 'self' https://api.stripe.com; "
+                "frame-src https://js.stripe.com; "
+                "font-src 'self' data:; "
+                "object-src 'none'; "
+                "base-uri 'self'; "
+                "form-action 'self';"
+            ),
+        )
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    else:
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' https://js.stripe.com; "
+                "style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data: https:; "
+                "connect-src 'self' https://api.stripe.com; "
+                "frame-src https://js.stripe.com; "
+                "font-src 'self' data:; "
+                "object-src 'none'; "
+                "base-uri 'self'; "
+                "form-action 'self';"
+            ),
+        )
     return response
+
+
+# CSRF defence — validate Origin header on all mutating requests.
+# Requests without an Origin header are permitted (server-to-server / old browsers);
+# SameSite=Lax on cookies already covers most of those cases.
+_CSRF_ALLOWED_ORIGIN = os.environ.get("APP_BASE_URL", "").rstrip("/")
+
+@app.before_request
+def _csrf_origin_check():
+    if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
+        return
+    if not _CSRF_ALLOWED_ORIGIN:
+        return  # unconfigured dev mode — skip
+    origin = request.headers.get("Origin", "").rstrip("/")
+    if not origin:
+        return  # no Origin header present — nothing to validate
+    if origin != _CSRF_ALLOWED_ORIGIN:
+        logger.warning("CSRF origin mismatch: expected %s got %s path=%s",
+                       _CSRF_ALLOWED_ORIGIN, origin, request.path)
+        return jsonify({"error": "Forbidden", "code": "invalid_origin"}), 403
+
 
 # Fix #4: JWT_SECRET must be set explicitly — no random fallback that would
 # invalidate all sessions on every restart and hide misconfiguration.
@@ -1531,6 +1565,18 @@ def serve_js(filename):
     return send_file(safe, mimetype="application/javascript")
 
 
+@app.route("/css/<path:filename>")
+def serve_css(filename):
+    """Serve CSS files from preview/css/."""
+    safe = os.path.realpath(os.path.join(_PREVIEW_DIR, "css", filename))
+    allowed = os.path.realpath(os.path.join(_PREVIEW_DIR, "css"))
+    if not safe.startswith(allowed + os.sep):
+        return "Not found", 404
+    if not os.path.exists(safe):
+        return "Not found", 404
+    return send_file(safe, mimetype="text/css")
+
+
 @app.route("/")
 def index():
     """Serve the main SaaS UI (self-contained preview/index.html)."""
@@ -1573,8 +1619,8 @@ def admin_panel():
 def logout_page():
     """Clear auth cookies and redirect to login."""
     resp = redirect("/login")
-    resp.delete_cookie("access_token")
-    resp.delete_cookie("refresh_token")
+    resp.delete_cookie("access_token",  path="/", samesite="Lax", secure=True)
+    resp.delete_cookie("refresh_token", path="/", samesite="Lax", secure=True)
     return resp
 
 

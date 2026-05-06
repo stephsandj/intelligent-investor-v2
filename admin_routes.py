@@ -11,7 +11,7 @@ from datetime import datetime, timezone, timedelta
 
 from flask import Blueprint, g, jsonify, request, make_response
 
-from auth import admin_portal_required, hash_password, check_password, generate_admin_token
+from auth import admin_portal_required, hash_password, check_password, generate_admin_token, decode_token, clear_admin_session
 from models import (
     get_all_users_admin,
     get_user_by_id,
@@ -131,9 +131,18 @@ def admin_login():
 
 @admin_bp.route("/api/logout", methods=["POST"])
 def admin_logout():
-    """Clear the admin_access cookie."""
+    """Clear the admin_access cookie and server-side idle tracking."""
+    token = request.cookies.get("admin_access", "")
+    if token:
+        try:
+            payload = decode_token(token)
+            admin_id = payload.get("sub")
+            if admin_id:
+                clear_admin_session(admin_id)
+        except Exception:
+            pass
     resp = make_response(jsonify({"ok": True}))
-    resp.delete_cookie("admin_access", path="/admin")
+    resp.delete_cookie("admin_access", path="/admin", samesite="Lax", secure=True)
     return resp, 200
 
 
