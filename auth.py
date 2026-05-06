@@ -950,7 +950,6 @@ def register():
     resp_body: dict = {
         "user_id": user_id,
         "email":   user["email"],
-        "tokens":  tokens,
         "email_verification_sent": True,
     }
     # When SMTP is not configured, surface the verify URL so the client can
@@ -1059,7 +1058,6 @@ def login():
         "user_id":      str(user["id"]),
         "email":        user["email"],
         "subscription": sub_info,
-        "tokens":       tokens,  # Keep in body for admin panel backward-compat
     })
     # Set HttpOnly cookies — more secure than localStorage
     resp.set_cookie("access_token",  tokens["access_token"],
@@ -1264,7 +1262,7 @@ def refresh():
         valid = models.verify_and_rotate_refresh_token(user_id, incoming_hash)
     except Exception as exc:
         logger.error("refresh: rotation DB check failed for %s: %s", user_id, exc)
-        valid = True  # degrade gracefully — allow this refresh if DB check errors
+        return jsonify({"error": "Session verification failed — please sign in again", "code": "db_error"}), 401
 
     if not valid:
         # Token already rotated — possible replay/theft. Clear stored hash so
