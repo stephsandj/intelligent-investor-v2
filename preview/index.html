@@ -5185,57 +5185,76 @@ function checkSubscriptionExpired() {
 
 // ── Calculate and display estimated run time ──
 function _estimateRunTime() {
-  const loserPeriod = document.querySelector('input[name="cfg-period"]:checked')?.value || 'daily100';
-  const markets     = document.querySelectorAll('.market-chip.active').length || 2;
-  const pdfEnabled  = document.getElementById('cfg-pdf')?.checked || false;
+  const loserPeriod  = document.querySelector('input[name="cfg-period"]:checked')?.value || 'daily100';
+  const activeMarkets = (typeof _cfgMarkets !== 'undefined' && _cfgMarkets.length > 0)
+                        ? _cfgMarkets
+                        : Array.from(document.querySelectorAll('.mkt-chip.active')).map(b => b.textContent.trim());
+  const pdfEnabled   = document.getElementById('cfg-pdf')?.checked || false;
   const emailEnabled = document.getElementById('cfg-email')?.checked || false;
-  const geo         = document.querySelector('input[name="cfg-geo"]:checked')?.value || 'all';
+  const geo          = document.querySelector('input[name="cfg-geo"]:checked')?.value || 'all';
 
-  const isTop500   = loserPeriod.endsWith('500');
-  const isAll      = loserPeriod.endsWith('all');
-  const isWeekly   = loserPeriod.startsWith('weekly');
-  const isYearly   = loserPeriod.startsWith('yearly');
-  const isValue    = loserPeriod.startsWith('value');
+  const isTop500  = loserPeriod.endsWith('500');
+  const isAll     = loserPeriod.endsWith('all');
+  const isWeekly  = loserPeriod.startsWith('weekly');
+  const isYearly  = loserPeriod.startsWith('yearly');
+  const isValue   = loserPeriod.startsWith('value');
 
-  // Base stock count to score
-  const baseStocks = isTop500 ? 500 : isAll ? 1200 : 100;
+  // Per-market qualifying pool (stocks with market cap > $300M that pass the mode filter).
+  // Calibrated from two live runs:
+  //   (1) AMEX daily100 USA-only PDF-on  → 77 s actual  (predicted 79 s, 2% error)
+  //   (2) weekly500 NYSE+NASDAQ+AMEX USA-only PDF-on → 2100 s actual  (predicted 2080 s, 1% error)
+  const POOL = {
+    daily:  { NYSE: 260, NASDAQ: 380, AMEX: 15 },
+    weekly: { NYSE: 400, NASDAQ: 570, AMEX: 25 },
+    yearly: { NYSE: 400, NASDAQ: 570, AMEX: 25 },
+    value:  { NYSE: 650, NASDAQ: 950, AMEX: 40 },
+  };
+  const modeKey    = isValue ? 'value' : isWeekly ? 'weekly' : isYearly ? 'yearly' : 'daily';
+  const poolMap    = POOL[modeKey];
+  const markets    = activeMarkets.length > 0 ? activeMarkets : ['NYSE', 'NASDAQ'];
+  const totalPool  = markets.reduce((s, m) => s + (poolMap[m.toUpperCase()] || 0), 0);
 
-  // Geography filter: agent must scan ~35% extra stocks to find N qualifying
-  const geoMult = (geo === 'usa' || geo === 'international') ? 1.35 : 1.0;
-  const effectiveStocks = Math.round(baseStocks * geoMult);
+  if (totalPool === 0) return '< 1 minute';
 
-  // Calibrated at 2.7s/stock (measured from 35-min weekly500 run)
-  const PER_STOCK_SECS = 2.7;
+  // Target N stocks to score
+  const targetN = isAll ? totalPool : (isTop500 ? 500 : 100);
 
-  // Fixed overhead: NASDAQ API universe fetch + dedup
-  let secs = 60;
-
-  // Bulk yfinance historical download (weekly/yearly only; not needed for daily/value)
-  if (isWeekly || isYearly) {
-    secs += 80 + (markets - 1) * 20; // ~80-120s depending on market count
+  // Geography overhead: to find N qualifying, the agent scans extra stocks.
+  //   USA only    → ~82 % of universe is US-domiciled → scan targetN / 0.82
+  //   Intl only   → ~18 % qualifies                  → scan targetN / 0.18
+  //   All stocks  → no overhead
+  let stocksToScan;
+  if (geo === 'usa') {
+    stocksToScan = Math.min(totalPool, Math.ceil(targetN / 0.82));
+  } else if (geo === 'international') {
+    stocksToScan = Math.min(totalPool, Math.ceil(targetN / 0.18));
+  } else {
+    stocksToScan = Math.min(totalPool, targetN);
   }
 
-  // Scoring loop (dominant factor)
-  if (isAll) {
-    // "All" mode is highly variable; cap display at a wide range
-    return '45-90 minutes';
-  }
-  secs += effectiveStocks * PER_STOCK_SECS;
+  // Per-stock processing time (yfinance + 0.3 s sleep × several calls).
+  // Throttling increases with run size — calibrated from live data.
+  let perStockSecs;
+  if      (stocksToScan <=  30) perStockSecs = 1.8;
+  else if (stocksToScan <= 100) perStockSecs = 2.2;
+  else if (stocksToScan <= 300) perStockSecs = 2.5;
+  else                          perStockSecs = 3.0;
 
-  // AI deep-dive: always top 5 picks via Claude API
-  secs += 25;
+  // Fixed components
+  const setupSecs  = 10 + markets.length * 5;           // NASDAQ API fetch per market
+  const bulkSecs   = (isWeekly || isYearly)             // yfinance historical batch download
+                     ? 70 + markets.length * 15 : 0;
+  const aiSecs     = 25;                                 // Claude API for top-5 deep-dive
+  const pdfSecs    = pdfEnabled
+                     ? (stocksToScan <= 20 ? 12 : stocksToScan <= 100 ? 40 : 85) : 0;
+  const emailSecs  = emailEnabled ? 30 : 0;
 
-  // PDF generation
-  if (pdfEnabled) {
-    secs += isTop500 ? 90 : 45;
-  }
+  const totalSecs  = setupSecs + bulkSecs + stocksToScan * perStockSecs + aiSecs + pdfSecs + emailSecs;
+  const mins       = totalSecs / 60;
 
-  // Email delivery
-  if (emailEnabled) secs += 30;
-
-  const mins = secs / 60;
-
-  if (mins < 5)  return '< 5 minutes';
+  if (mins < 2)  return '< 2 minutes';
+  if (mins < 3)  return '2-3 minutes';
+  if (mins < 5)  return '3-5 minutes';
   if (mins < 8)  return '5-8 minutes';
   if (mins < 12) return '8-12 minutes';
   const lo = Math.floor(mins * 0.88);
