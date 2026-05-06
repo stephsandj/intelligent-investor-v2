@@ -1,0 +1,83 @@
+{
+  "timestamp": "2026-05-06T15:55:21.482206",
+  "summary": {
+    "total": 12,
+    "passed": 3,
+    "failed": 9,
+    "pass_rate": 25.0
+  },
+  "tests": [
+    {
+      "test": "API Key: No hardcoded fallback",
+      "status": "FAIL",
+      "details": "Old FMP key still in codebase",
+      "timestamp": "2026-05-06T15:53:55.391447"
+    },
+    {
+      "test": "CSRF: Wrong origin rejected",
+      "status": "FAIL",
+      "details": "HTTPSConnectionPool(host='app.terminalelearn.com', port=443): Read timed out. (read timeout=5)",
+      "timestamp": "2026-05-06T15:54:00.443358"
+    },
+    {
+      "test": "Rate Limit: Blocks rapid attempts",
+      "status": "FAIL",
+      "details": "No 429 in responses: []",
+      "timestamp": "2026-05-06T15:54:51.187949"
+    },
+    {
+      "test": "Header Validation: Proxy header check",
+      "status": "PASS",
+      "details": "Code deployed (waiting for logs)",
+      "timestamp": "2026-05-06T15:54:51.251098"
+    },
+    {
+      "test": "Token Rotation: State tracking",
+      "status": "SKIP",
+      "details": "TEST_USER_TOKEN not configured",
+      "timestamp": "2026-05-06T15:54:51.251159"
+    },
+    {
+      "test": "Email Tokens: Expiration & hashing",
+      "status": "SKIP",
+      "details": "DATABASE_URL not set",
+      "timestamp": "2026-05-06T15:54:51.261991"
+    },
+    {
+      "test": "Error Messages: Generic responses",
+      "status": "SKIP",
+      "details": "TEST_ADMIN_TOKEN not configured",
+      "timestamp": "2026-05-06T15:54:51.262003"
+    },
+    {
+      "test": "Atomic Ops: Advisory locks",
+      "status": "PASS",
+      "details": "Lock mechanism implemented",
+      "timestamp": "2026-05-06T15:54:51.266071"
+    },
+    {
+      "test": "Path Traversal: UUID validation",
+      "status": "PASS",
+      "details": "Validation function found (2 occurrences)",
+      "timestamp": "2026-05-06T15:54:51.270088"
+    },
+    {
+      "test": "Deployment: App accessible",
+      "status": "FAIL",
+      "details": "HTTPSConnectionPool(host='app.terminalelearn.com', port=443): Read timed out. (read timeout=10)",
+      "timestamp": "2026-05-06T15:55:01.344386"
+    },
+    {
+      "test": "HTTPS: HSTS header",
+      "status": "FAIL",
+      "details": "HTTPSConnectionPool(host='app.terminalelearn.com', port=443): Read timed out. (read timeout=10)",
+      "timestamp": "2026-05-06T15:55:11.410729"
+    },
+    {
+      "test": "Security: Required headers",
+      "status": "FAIL",
+      "details": "HTTPSConnectionPool(host='app.terminalelearn.com', port=443): Read timed out. (read timeout=10)",
+      "timestamp": "2026-05-06T15:55:21.481794"
+    }
+  ]
+}

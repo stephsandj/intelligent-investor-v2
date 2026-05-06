@@ -34,3 +34,6 @@ python-dotenv>=1.0.0
 
 # System monitoring (admin metrics dashboard)
 psutil>=5.9.0
+
+# Error tracking & monitoring
+sentry-sdk[flask]>=1.40.0

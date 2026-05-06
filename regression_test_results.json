@@ -1,0 +1,192 @@
+{
+  "timestamp": "2026-05-06T15:56:17.330595",
+  "summary": {
+    "total": 30,
+    "passed": 27,
+    "failed": 3,
+    "skipped": 0,
+    "pass_rate": 90.0
+  },
+  "tests": [
+    {
+      "test": "Syntax: dashboard_v2.py valid",
+      "status": "PASS",
+      "details": "No syntax errors",
+      "timestamp": "2026-05-06T15:56:16.989708"
+    },
+    {
+      "test": "Syntax: models.py valid",
+      "status": "PASS",
+      "details": "No syntax errors",
+      "timestamp": "2026-05-06T15:56:16.993185"
+    },
+    {
+      "test": "Syntax: auth.py valid",
+      "status": "PASS",
+      "details": "No syntax errors",
+      "timestamp": "2026-05-06T15:56:16.996162"
+    },
+    {
+      "test": "Syntax: admin_routes.py valid",
+      "status": "PASS",
+      "details": "No syntax errors",
+      "timestamp": "2026-05-06T15:56:17.000937"
+    },
+    {
+      "test": "Syntax: plans.py valid",
+      "status": "PASS",
+      "details": "No syntax errors",
+      "timestamp": "2026-05-06T15:56:17.002124"
+    },
+    {
+      "test": "Import: psycopg2",
+      "status": "PASS",
+      "details": "Database driver",
+      "timestamp": "2026-05-06T15:56:17.037733"
+    },
+    {
+      "test": "Import: flask",
+      "status": "PASS",
+      "details": "Web framework",
+      "timestamp": "2026-05-06T15:56:17.137175"
+    },
+    {
+      "test": "Import: jwt",
+      "status": "PASS",
+      "details": "JWT authentication",
+      "timestamp": "2026-05-06T15:56:17.183711"
+    },
+    {
+      "test": "Import: bcrypt",
+      "status": "PASS",
+      "details": "Password hashing",
+      "timestamp": "2026-05-06T15:56:17.196894"
+    },
+    {
+      "test": "Import: requests",
+      "status": "PASS",
+      "details": "HTTP client",
+      "timestamp": "2026-05-06T15:56:17.300962"
+    },
+    {
+      "test": "Security: UUID validation for path traversal",
+      "status": "PASS",
+      "details": "dashboard_v2.py",
+      "timestamp": "2026-05-06T15:56:17.301206"
+    },
+    {
+      "test": "Security: User ID validation function",
+      "status": "PASS",
+      "details": "dashboard_v2.py",
+      "timestamp": "2026-05-06T15:56:17.301299"
+    },
+    {
+      "test": "Security: IP extraction with proxy validation",
+      "status": "PASS",
+      "details": "auth.py",
+      "timestamp": "2026-05-06T15:56:17.301370"
+    },
+    {
+      "test": "Security: Rate limiting function",
+      "status": "PASS",
+      "details": "auth.py",
+      "timestamp": "2026-05-06T15:56:17.301444"
+    },
+    {
+      "test": "Security: Advisory lock mechanism (if called from plans)",
+      "status": "FAIL",
+      "details": "Pattern not found in auth.py",
+      "timestamp": "2026-05-06T15:56:17.301514"
+    },
+    {
+      "test": "Schema: Email token expiration",
+      "status": "PASS",
+      "details": "Column defined",
+      "timestamp": "2026-05-06T15:56:17.301547"
+    },
+    {
+      "test": "Schema: Advisory locks",
+      "status": "FAIL",
+      "details": "Lock mechanism missing",
+      "timestamp": "2026-05-06T15:56:17.301561"
+    },
+    {
+      "test": "Dependency: flask",
+      "status": "PASS",
+      "details": "Web framework",
+      "timestamp": "2026-05-06T15:56:17.301860"
+    },
+    {
+      "test": "Dependency: psycopg2-binary",
+      "status": "PASS",
+      "details": "Database driver",
+      "timestamp": "2026-05-06T15:56:17.301862"
+    },
+    {
+      "test": "Dependency: PyJWT",
+      "status": "PASS",
+      "details": "JWT support",
+      "timestamp": "2026-05-06T15:56:17.301863"
+    },
+    {
+      "test": "Dependency: bcrypt",
+      "status": "PASS",
+      "details": "Password hashing",
+      "timestamp": "2026-05-06T15:56:17.301865"
+    },
+    {
+      "test": "Dependency: sentry-sdk",
+      "status": "PASS",
+      "details": "Error tracking",
+      "timestamp": "2026-05-06T15:56:17.301867"
+    },
+    {
+      "test": "Config: .env",
+      "status": "PASS",
+      "details": "Environment variables",
+      "timestamp": "2026-05-06T15:56:17.301882"
+    },
+    {
+      "test": "Config: .gitignore",
+      "status": "PASS",
+      "details": "Git ignore rules",
+      "timestamp": "2026-05-06T15:56:17.302113"
+    },
+    {
+      "test": "Config: requirements.txt",
+      "status": "PASS",
+      "details": "Python dependencies",
+      "timestamp": "2026-05-06T15:56:17.302126"
+    },
+    {
+      "test": "Config: .github/workflows/secrets-scan.yml",
+      "status": "PASS",
+      "details": "Secrets scanning workflow",
+      "timestamp": "2026-05-06T15:56:17.302139"
+    },
+    {
+      "test": "Hook: pre-commit executable",
+      "status": "PASS",
+      "details": "Secret scanning enabled",
+      "timestamp": "2026-05-06T15:56:17.302163"
+    },
+    {
+      "test": "Git: Recent commits accessible",
+      "status": "PASS",
+      "details": "Git log available",
+      "timestamp": "2026-05-06T15:56:17.330099"
+    },
+    {
+      "test": "Git: Security commits present",
+      "status": "PASS",
+      "details": "Fix commits found",
+      "timestamp": "2026-05-06T15:56:17.330126"
+    },
+    {
+      "test": "Quality: auth.py safe",
+      "status": "FAIL",
+      "details": "Dangerous code patterns found",
+      "timestamp": "2026-05-06T15:56:17.330468"
+    }
+  ]
+}

@@ -199,6 +199,24 @@ app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
 app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024  # 1 MB max body
 
+# Initialize Sentry for error tracking (if DSN is configured)
+_SENTRY_DSN = os.environ.get("SENTRY_DSN", "").strip()
+if _SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.flask import FlaskIntegration
+        sentry_sdk.init(
+            dsn=_SENTRY_DSN,
+            integrations=[FlaskIntegration()],
+            traces_sample_rate=0.1,  # 10% of transactions
+            environment=os.environ.get("ENVIRONMENT", "production"),
+        )
+        logger.info("Sentry error tracking initialized")
+    except ImportError:
+        logger.warning("Sentry SDK not installed; error tracking disabled")
+    except Exception as e:
+        logger.error("Failed to initialize Sentry: %s", e)
+
 @app.after_request
 def _security_headers(response):
     """Add security headers to every response."""
