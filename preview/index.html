@@ -5185,73 +5185,62 @@ function checkSubscriptionExpired() {
 
 // ── Calculate and display estimated run time ──
 function _estimateRunTime() {
-  // Get configuration
-  const cfgPeriodEl = document.querySelector('input[name="cfg-period"]:checked');
-  const loserPeriod = cfgPeriodEl?.value || 'daily100';
-  const markets = Array.from(document.querySelectorAll('.market-chip.active')).map(el => el.dataset.market) || _cfgMarkets || [];
-  const pdfEnabled = document.getElementById('cfg-pdf')?.checked || false;
+  const loserPeriod = document.querySelector('input[name="cfg-period"]:checked')?.value || 'daily100';
+  const markets     = document.querySelectorAll('.market-chip.active').length || 2;
+  const pdfEnabled  = document.getElementById('cfg-pdf')?.checked || false;
   const emailEnabled = document.getElementById('cfg-email')?.checked || false;
+  const geo         = document.querySelector('input[name="cfg-geo"]:checked')?.value || 'all';
 
-  // Determine stock count multiplier based on criteria
-  let baseCriteria = loserPeriod;
-  let isAllStocks = baseCriteria.includes('All') || baseCriteria === 'all_losers' || baseCriteria === 'all_value';
-  let isTop500 = baseCriteria.includes('500') || baseCriteria === 'top500';
-  let isTop100 = baseCriteria.includes('100') || baseCriteria === 'top100' || baseCriteria === 'daily100' || baseCriteria === 'weekly100' || baseCriteria === '52week100';
+  const isTop500   = loserPeriod.endsWith('500');
+  const isAll      = loserPeriod.endsWith('all');
+  const isWeekly   = loserPeriod.startsWith('weekly');
+  const isYearly   = loserPeriod.startsWith('yearly');
+  const isValue    = loserPeriod.startsWith('value');
 
-  // Stock count estimation
-  let baseStockCount = 100;
-  if (isAllStocks) {
-    baseStockCount = 4500; // 3500-5000 range average
-  } else if (isTop500) {
-    baseStockCount = 500;
-  } else if (isTop100) {
-    baseStockCount = 100;
+  // Base stock count to score
+  const baseStocks = isTop500 ? 500 : isAll ? 1200 : 100;
+
+  // Geography filter: agent must scan ~35% extra stocks to find N qualifying
+  const geoMult = (geo === 'usa' || geo === 'international') ? 1.35 : 1.0;
+  const effectiveStocks = Math.round(baseStocks * geoMult);
+
+  // Calibrated at 2.7s/stock (measured from 35-min weekly500 run)
+  const PER_STOCK_SECS = 2.7;
+
+  // Fixed overhead: NASDAQ API universe fetch + dedup
+  let secs = 60;
+
+  // Bulk yfinance historical download (weekly/yearly only; not needed for daily/value)
+  if (isWeekly || isYearly) {
+    secs += 80 + (markets - 1) * 20; // ~80-120s depending on market count
   }
 
-  // Market multiplier
-  const marketCount = Math.max(1, markets.length);
+  // Scoring loop (dominant factor)
+  if (isAll) {
+    // "All" mode is highly variable; cap display at a wide range
+    return '45-90 minutes';
+  }
+  secs += effectiveStocks * PER_STOCK_SECS;
 
-  // Total stocks to analyze
-  const totalStocks = baseStockCount * marketCount;
+  // AI deep-dive: always top 5 picks via Claude API
+  secs += 25;
 
-  // Time calculation (in seconds)
-  let estSeconds = 20; // Base API + setup overhead
-
-  // Per-stock processing: 300-500ms per stock, use 350ms average
-  estSeconds += (totalStocks * 0.35);
-
-  // PDF generation (if enabled)
+  // PDF generation
   if (pdfEnabled) {
-    if (isAllStocks) {
-      estSeconds += 12; // 10-15s for large PDFs
-    } else if (isTop500) {
-      estSeconds += 8;  // 8-10s for 500
-    } else {
-      estSeconds += 3;  // 1-3s for 100
-    }
+    secs += isTop500 ? 90 : 45;
   }
 
-  // Email sending (if enabled)
-  if (emailEnabled) {
-    estSeconds += 2;
-  }
+  // Email delivery
+  if (emailEnabled) secs += 30;
 
-  // Convert to minutes with buffer (round up)
-  const estMinutes = Math.ceil(estSeconds / 60);
+  const mins = secs / 60;
 
-  // Return human-readable estimate with range
-  let estimate = '';
-  if (estMinutes === 0) {
-    estimate = '< 1 minute';
-  } else if (estMinutes === 1) {
-    estimate = '1-2 minutes';
-  } else if (estMinutes <= 3) {
-    estimate = estMinutes + '-' + (estMinutes + 1) + ' minutes';
-  } else {
-    estimate = estMinutes + '-' + (estMinutes + 2) + ' minutes';
-  }
-
-  return estimate;
+  if (mins < 5)  return '< 5 minutes';
+  if (mins < 8)  return '5-8 minutes';
+  if (mins < 12) return '8-12 minutes';
+  const lo = Math.floor(mins * 0.88);
+  const hi = Math.ceil(mins * 1.12);
+  return lo + '-' + hi + ' minutes';
 }
 
 // ── Show estimate message for 3 seconds ──
@@ -5265,11 +5254,11 @@ function _showRunEstimate(estimate) {
     existing.remove();
   }
 
-  // Create and insert new estimate message next to countdown badge
+  // Create and insert new estimate message to the left of countdown badge
   const msg = document.createElement('span');
   msg.className = 'screener-estimate-msg';
   msg.textContent = 'Estimated: ' + estimate;
-  countdownBadge.parentElement.insertBefore(msg, countdownBadge.nextSibling);
+  countdownBadge.parentElement.insertBefore(msg, countdownBadge);
 
   // Auto-remove after 3 seconds
   setTimeout(() => {
