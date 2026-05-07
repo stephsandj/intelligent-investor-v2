@@ -83,24 +83,9 @@ except ValueError:
 except Exception as _e:
     logger.warning("Could not raise fd limit: %s", _e)
 
-def _pip_install(*pkgs):
-    subprocess.check_call(
-        [sys.executable, "-m", "pip", "install", "--user", "-q", *pkgs]
-    )
-
-try:
-    from flask import (Flask, jsonify, render_template_string, send_file,
-                       request, redirect, url_for, g, make_response)
-except ImportError:
-    _pip_install("flask")
-    from flask import (Flask, jsonify, render_template_string, send_file,
-                       request, redirect, url_for, g, make_response)
-
-try:
-    from apscheduler.schedulers.background import BackgroundScheduler
-except ImportError:
-    _pip_install("apscheduler")
-    from apscheduler.schedulers.background import BackgroundScheduler
+from flask import (Flask, jsonify, render_template_string, send_file,
+                   request, redirect, url_for, g, make_response)
+from apscheduler.schedulers.background import BackgroundScheduler
 
 # Metrics collector — lightweight, imported lazily so a missing psutil doesn't
 # break startup.  collect_and_store() is wired into the scheduler below.
@@ -345,17 +330,13 @@ try:
         logger.warning("DB init failed (%s). Running in local-only mode.", _e)
 
 except Exception as _import_err:
-    logger.warning(
-        "Auth/DB modules not available (%s). Running in single-user local mode.",
+    logger.critical(
+        "FATAL: Auth/DB modules failed to load: %s. "
+        "Fix the dependency and restart the container.",
         _import_err,
+        exc_info=True,
     )
-    # Provide stub decorators so the app boots even without the DB
-    def auth_required(fn):
-        return fn
-    def admin_required(fn):
-        return fn
-    def _get_client_ip():
-        return request.remote_addr
+    raise SystemExit(1)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 6. Global JSON error handlers — always return JSON, never HTML

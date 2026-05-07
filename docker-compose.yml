@@ -72,21 +72,6 @@ services:
     volumes:
     - pg_data:/var/lib/postgresql/data
     - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
-  nginx:
-    depends_on:
-      app:
-        condition: service_healthy
-    image: nginx:1.25-alpine
-    networks:
-    - ii_net
-    ports:
-    - 80:80
-    - 443:443
-    restart: unless-stopped
-    volumes:
-    - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    - certbot_certs:/etc/letsencrypt:ro
-    - certbot_www:/var/www/certbot:ro
 volumes:
   app_logs: null
   app_reports: null

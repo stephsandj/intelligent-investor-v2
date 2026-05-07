@@ -3,19 +3,9 @@ models.py - PostgreSQL database layer for the Stock Screening SaaS application.
 Connection string from env var DATABASE_URL.
 """
 
-import subprocess
-import sys
-
-# Auto-install psycopg2-binary if not present
-try:
-    import psycopg2
-    import psycopg2.pool
-    import psycopg2.extras
-except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "psycopg2-binary"])
-    import psycopg2
-    import psycopg2.pool
-    import psycopg2.extras
+import psycopg2
+import psycopg2.pool
+import psycopg2.extras
 
 import json
 import logging

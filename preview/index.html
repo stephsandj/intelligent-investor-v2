@@ -2200,6 +2200,28 @@
 //  Intelligent Investor V2 — Frontend ↔ Backend wiring  (fixed)
 // ════════════════════════════════════════════════════════════════════
 
+// ── CSRF helpers ─────────────────────────────────────────────────────────
+function _getCsrfToken() {
+  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
+function _csrfHeaders() {
+  const tok = _getCsrfToken();
+  return tok ? { 'X-CSRF-Token': tok } : {};
+}
+
+// ── XSS-safe rendering helpers ────────────────────────────────────────────
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── Client state ───────────────────────────────────────────────────
 var _loggedIn      = false;
 var _currentUser   = null;   // from GET /auth/me
@@ -2291,7 +2313,7 @@ async function _tryRefresh() {
     // refresh_token is in HttpOnly cookie — sent automatically with credentials:'include'
     const resp = await fetch('/auth/refresh', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ..._csrfHeaders() },
       credentials: 'include',
     });
     return resp.ok;
@@ -2301,7 +2323,7 @@ async function _tryRefresh() {
 function _forceLogout() {
   _clearTokens();
   // Also ask server to clear HttpOnly cookies
-  fetch('/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+  fetch('/auth/logout', { method: 'POST', headers: { ..._csrfHeaders() }, credentials: 'include' }).catch(() => {});
   _currentUser = null;
   _currentSub  = null;
   setLoggedIn(false);
@@ -4121,7 +4143,7 @@ function generateAnalysisHTML(pick, accent) {
   html += `
     <div class="analysis-rec-box" style="background: ${bgColor}; border-left-color: ${borderColor}">
       <p style="color: ${textColor}; margin-bottom: 8px;"><strong>${icon} ${rawLabel}</strong></p>
-      <p>${ai.recommendation_narrative || 'Analysis pending...'}</p>
+      <p>${escapeHtml(ai.recommendation_narrative) || 'Analysis pending...'}</p>
     </div>
   `;
 
@@ -4129,7 +4151,7 @@ function generateAnalysisHTML(pick, accent) {
   html += `
     <div class="analysis-section">
       <div class="analysis-section-title">Business Overview</div>
-      <div class="analysis-section-content">${ai.business_context || 'Company background and business model details coming soon.'}</div>
+      <div class="analysis-section-content">${escapeHtml(ai.business_context) || 'Company background and business model details coming soon.'}</div>
     </div>
   `;
 
@@ -4140,7 +4162,7 @@ function generateAnalysisHTML(pick, accent) {
       <div class="analysis-section-title">⚠️ Value Trap Risks</div>
       ${vtRisks.length > 0 ? `
         <ul class="analysis-bullets orange">
-          ${vtRisks.map(f => `<li>${f}</li>`).join('')}
+          ${vtRisks.map(f => `<li>${escapeHtml(f)}</li>`).join('')}
         </ul>
       ` : `<p style="color: var(--muted); font-size: .82rem;">No significant value trap risks identified.</p>`}
     </div>
@@ -4153,7 +4175,7 @@ function generateAnalysisHTML(pick, accent) {
       <div class="analysis-section-title">Key Signals</div>
       ${signals.length > 0 ? `
         <ul class="analysis-bullets green">
-          ${signals.map(s => `<li>${s}</li>`).join('')}
+          ${signals.map(s => `<li>${escapeHtml(s)}</li>`).join('')}
         </ul>
       ` : `<p style="color: var(--muted); font-size: .82rem;">Key signals will be populated after analysis completes.</p>`}
     </div>
@@ -4166,7 +4188,7 @@ function generateAnalysisHTML(pick, accent) {
       <div class="analysis-section-title">✕ Hard Disqualifiers</div>
       ${disqs.length > 0 ? `
         <ul class="analysis-bullets red">
-          ${disqs.map(d => `<li>${d}</li>`).join('')}
+          ${disqs.map(d => `<li>${escapeHtml(d)}</li>`).join('')}
         </ul>
       ` : `<p style="color: var(--muted); font-size: .82rem;">No hard disqualifiers found.</p>`}
     </div>
@@ -4243,8 +4265,8 @@ function generateAnalysisHTML(pick, accent) {
       return `
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:${rowBg};border:1px solid ${rowBdr};border-radius:8px;">
           <div style="min-width:0;flex:1;">
-            <div style="font-size:0.78rem;font-weight:700;color:var(--text);line-height:1.3;">${c.criterion || ''}</div>
-            <div style="font-size:0.71rem;color:var(--muted);margin-top:3px;line-height:1.4;">${c.detail || ''}</div>
+            <div style="font-size:0.78rem;font-weight:700;color:var(--text);line-height:1.3;">${escapeHtml(c.criterion) || ''}</div>
+            <div style="font-size:0.71rem;color:var(--muted);margin-top:3px;line-height:1.4;">${escapeHtml(c.detail) || ''}</div>
           </div>
           <span style="flex-shrink:0;display:inline-block;padding:3px 9px;border-radius:5px;font-size:0.68rem;font-weight:800;letter-spacing:0.6px;text-transform:uppercase;background:${tagBg};color:${tagColor};">${st === 'COND' ? 'COND' : st}</span>
         </div>`;
@@ -4270,8 +4292,8 @@ function generateAnalysisHTML(pick, accent) {
       return `
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:${rowBg};border:1px solid ${rowBdr};border-radius:8px;">
           <div style="min-width:0;flex:1;">
-            <div style="font-size:0.78rem;font-weight:700;color:var(--text);line-height:1.3;">${c.criterion || ''}</div>
-            <div style="font-size:0.71rem;color:var(--muted);margin-top:3px;line-height:1.4;">${c.detail || ''}</div>
+            <div style="font-size:0.78rem;font-weight:700;color:var(--text);line-height:1.3;">${escapeHtml(c.criterion) || ''}</div>
+            <div style="font-size:0.71rem;color:var(--muted);margin-top:3px;line-height:1.4;">${escapeHtml(c.detail) || ''}</div>
           </div>
           <span style="flex-shrink:0;display:inline-block;padding:3px 9px;border-radius:5px;font-size:0.68rem;font-weight:800;letter-spacing:0.6px;text-transform:uppercase;background:${tagBg};color:${tagColor};">${st === 'COND' ? 'COND' : st}</span>
         </div>`;
@@ -4371,8 +4393,8 @@ function _clRow(c) {
   return `<div style="display:flex;align-items:flex-start;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">
     <span style="font-size:.7rem;font-weight:700;padding:2px 5px;border-radius:4px;background:${bg};color:${col};flex-shrink:0;margin-top:1px">${icon} ${c.status}</span>
     <div style="font-size:.78rem;min-width:0">
-      <div style="color:var(--text);font-weight:500">${c.criterion}</div>
-      <div style="color:var(--muted);font-size:.73rem;margin-top:1px">${c.detail || ''}</div>
+      <div style="color:var(--text);font-weight:500">${escapeHtml(c.criterion)}</div>
+      <div style="color:var(--muted);font-size:.73rem;margin-top:1px">${escapeHtml(c.detail) || ''}</div>
     </div>
   </div>`;
 }
@@ -4424,7 +4446,7 @@ function renderPickPanel(pick, accent) {
   const sig = document.getElementById('panel-signals');
   if (sig) {
     const signals = ai.key_signals || '';
-    sig.innerHTML = '<strong>Key Signals</strong><br>' + (Array.isArray(signals) ? signals.join('<br>') : signals.replace(/\n/g,'<br>'));
+    sig.innerHTML = '<strong>Key Signals</strong><br>' + (Array.isArray(signals) ? signals.map(escapeHtml).join('<br>') : escapeHtml(signals).replace(/\n/g,'<br>'));
     sig.style.display = signals ? '' : 'none';
   }
 
@@ -4432,7 +4454,7 @@ function renderPickPanel(pick, accent) {
   const flags = document.getElementById('panel-flags');
   if (flags) {
     const disq = ai.disqualifiers || ai.value_trap_flags || '';
-    flags.innerHTML = '<strong>Value Trap Flags</strong><br>' + (Array.isArray(disq) ? disq.join('<br>') : disq.replace(/\n/g,'<br>'));
+    flags.innerHTML = '<strong>Value Trap Flags</strong><br>' + (Array.isArray(disq) ? disq.map(escapeHtml).join('<br>') : escapeHtml(disq).replace(/\n/g,'<br>'));
     flags.style.display = disq ? '' : 'none';
   }
 
@@ -4454,7 +4476,7 @@ function renderPickPanel(pick, accent) {
       ['Market Cap',    _fmtLarge(pick.market_cap)],
     ];
     mg.innerHTML = metrics.map(([k,v]) =>
-      `<div class="metric-row"><span class="metric-key">${k}</span><span class="metric-val">${v}</span></div>`
+      `<div class="metric-row"><span class="metric-key">${escapeHtml(k)}</span><span class="metric-val">${escapeHtml(String(v))}</span></div>`
     ).join('');
   }
 
@@ -4465,7 +4487,7 @@ function renderPickPanel(pick, accent) {
     const verdict = ai.metrics_assessment || '';
     if (verdict) {
       vd.style.display = '';
-      vd.innerHTML = '<strong style="color:var(--text)">Analyst Verdict</strong><br><span style="color:var(--muted)">' + verdict + '</span>';
+      vd.innerHTML = '<strong style="color:var(--text)">Analyst Verdict</strong><br><span style="color:var(--muted)">' + escapeHtml(verdict) + '</span>';
     } else {
       vd.style.display = 'none';
     }

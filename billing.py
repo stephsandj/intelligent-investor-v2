@@ -5,15 +5,7 @@ Secrets from env vars: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
 Price ID env vars: STRIPE_PRICE_<PLAN>_<CYCLE>  e.g. STRIPE_PRICE_STARTER_MONTHLY
 """
 
-import subprocess
-import sys
-
-# Auto-install stripe if not present
-try:
-    import stripe
-except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "stripe"])
-    import stripe
+import stripe
 
 import json
 import logging

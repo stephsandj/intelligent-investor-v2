@@ -4,16 +4,6 @@ Secrets from env vars: JWT_SECRET (required), JWT_ALGORITHM (default HS256).
 Email delivery via: GMAIL_FROM, GMAIL_APP_PASSWORD, APP_BASE_URL.
 """
 
-import subprocess
-import sys
-
-# Auto-install dependencies
-for _pkg, _import in [("PyJWT", "jwt"), ("bcrypt", "bcrypt")]:
-    try:
-        __import__(_import)
-    except ImportError:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", _pkg])
-
 import jwt
 import bcrypt
 
@@ -31,6 +21,7 @@ from functools import wraps
 from typing import Dict, Optional, Tuple
 
 import time as _time
+import hmac as _hmac
 
 from flask import Blueprint, g, jsonify, redirect, request
 
@@ -85,6 +76,36 @@ def check_password(plain: str, hashed: str) -> bool:
 def _hash_token(token: str) -> str:
     """SHA-256 hex digest of a JWT string — used for refresh-token rotation checks."""
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _generate_csrf_token() -> str:
+    """Generate a cryptographically secure CSRF token."""
+    return secrets.token_urlsafe(32)
+
+
+def csrf_required(fn):
+    """Decorator: verify CSRF double-submit cookie for state-changing requests.
+
+    Frontend must read the non-HttpOnly 'csrf_token' cookie and echo it in
+    the X-CSRF-Token request header for all POST/PUT/PATCH/DELETE requests.
+    """
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if request.method in ("GET", "HEAD", "OPTIONS", "TRACE"):
+            return fn(*args, **kwargs)
+        csrf_cookie = request.cookies.get("csrf_token", "")
+        csrf_header = request.headers.get("X-CSRF-Token", "")
+        if not csrf_cookie or not csrf_header:
+            logger.warning(
+                "CSRF token missing — cookie=%s header=%s path=%s ip=%s",
+                bool(csrf_cookie), bool(csrf_header), request.path, _get_client_ip()
+            )
+            return jsonify({"error": "CSRF validation failed", "code": "csrf_missing"}), 403
+        if not _hmac.compare_digest(csrf_cookie.encode(), csrf_header.encode()):
+            logger.warning("CSRF token mismatch path=%s ip=%s", request.path, _get_client_ip())
+            return jsonify({"error": "CSRF validation failed", "code": "csrf_mismatch"}), 403
+        return fn(*args, **kwargs)
+    return wrapper
 
 
 def generate_tokens(user_id: str) -> Dict[str, str]:
@@ -721,25 +742,71 @@ def _extract_token_from_request() -> Optional[str]:
     return request.cookies.get("access_token")
 
 
+# Cloudflare's published IPv4 ranges (updated 2024). Used to validate CF-Connecting-IP.
+_CF_IPV4_RANGES = [
+    "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22", "103.31.4.0/22",
+    "141.101.64.0/18", "108.162.192.0/18", "190.93.240.0/20", "188.114.96.0/20",
+    "197.234.240.0/22", "198.41.128.0/17", "162.158.0.0/15",  "104.16.0.0/13",
+    "104.24.0.0/14",   "172.64.0.0/13",   "131.0.72.0/22",
+]
+_CF_IPV6_RANGES = [
+    "2400:cb00::/32", "2606:4700::/32", "2803:f800::/32", "2405:b500::/32",
+    "2405:8100::/32", "2a06:98c0::/29", "2c0f:f248::/32",
+]
+
+import ipaddress as _ipaddress
+
+def _is_cloudflare_ip(addr: str) -> bool:
+    """Return True if addr is within a known Cloudflare IP range."""
+    try:
+        ip = _ipaddress.ip_address(addr)
+        ranges = _CF_IPV6_RANGES if ip.version == 6 else _CF_IPV4_RANGES
+        return any(ip in _ipaddress.ip_network(r, strict=False) for r in ranges)
+    except ValueError:
+        return False
+
+
 def _get_client_ip() -> Optional[str]:
-    """Get client IP, validating X-Forwarded-For only from trusted proxies."""
-    # Cloudflare header takes precedence
-    if request.headers.get("CF-Connecting-IP"):
-        return request.headers.get("CF-Connecting-IP")
+    """Get client IP from trusted sources only.
 
-    # Only trust X-Forwarded-For if from known reverse proxy (Traefik in Docker)
-    # Traefik connects from docker network (172.17.x.x)
-    if request.remote_addr and request.remote_addr.startswith("172.17."):
-        forwarded = request.headers.get("X-Forwarded-For")
-        if forwarded:
-            # Take first IP (original client), log if multiple hops (spoofing attempt)
-            ips = [ip.strip() for ip in forwarded.split(",")]
-            if len(ips) > 1:
-                logger.warning("Suspicious X-Forwarded-For with multiple hops: %s", forwarded)
-            return ips[0]
+    Trust order:
+    1. CF-Connecting-IP — only when remote_addr is a known Cloudflare IP.
+    2. X-Forwarded-For  — only when remote_addr is the Docker/Traefik network.
+    3. request.remote_addr — direct connection fallback.
+    """
+    remote = request.remote_addr or ""
 
-    # Fallback to direct connection IP
-    return request.remote_addr
+    # 1. Cloudflare — only trust CF-Connecting-IP if the request actually
+    #    arrived from a Cloudflare edge node.
+    if _is_cloudflare_ip(remote):
+        cf_ip = request.headers.get("CF-Connecting-IP", "").strip()
+        if cf_ip:
+            return cf_ip
+
+    # 2. Traefik (Docker bridge network 172.16.0.0/12)
+    try:
+        _remote_ip = _ipaddress.ip_address(remote)
+        _traefik_net = _ipaddress.ip_network("172.16.0.0/12", strict=False)
+        if _remote_ip in _traefik_net:
+            forwarded = request.headers.get("X-Forwarded-For", "").strip()
+            if forwarded:
+                # Take the rightmost entry that is NOT a trusted proxy —
+                # this is the last address added by a system we control.
+                ips = [ip.strip() for ip in forwarded.split(",")]
+                # Filter out private/loopback addresses added by our own infra
+                for candidate in reversed(ips):
+                    try:
+                        cand_ip = _ipaddress.ip_address(candidate)
+                        if not cand_ip.is_private and not cand_ip.is_loopback:
+                            return candidate
+                    except ValueError:
+                        continue
+                return ips[0]  # fallback: leftmost if all are private
+    except ValueError:
+        pass
+
+    # 3. Direct connection
+    return remote
 
 
 # ---------------------------------------------------------------------------
@@ -997,6 +1064,10 @@ def register():
     resp.set_cookie("refresh_token", tokens["refresh_token"],
                     httponly=True, samesite="Lax", secure=True,
                     max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600)
+    csrf_tok = _generate_csrf_token()
+    resp.set_cookie("csrf_token", csrf_tok,
+                    httponly=False, samesite="Strict", secure=True,
+                    max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600)
     return resp, 201
 
 
@@ -1099,10 +1170,15 @@ def login():
     resp.set_cookie("refresh_token", tokens["refresh_token"],
                     httponly=True, samesite="Lax", secure=True,
                     max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600)
+    csrf_tok = _generate_csrf_token()
+    resp.set_cookie("csrf_token", csrf_tok,
+                    httponly=False, samesite="Strict", secure=True,
+                    max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600)
     return resp
 
 
 @auth_bp.route("/logout", methods=["POST"])
+@csrf_required
 def logout():
     """POST /auth/logout — Clear cookies and invalidate refresh token hash."""
     # Invalidate the stored refresh token hash so the cookie (still held by
@@ -1120,6 +1196,7 @@ def logout():
     response = jsonify({"ok": True})
     response.delete_cookie("access_token",  path="/", samesite="Lax", secure=True)
     response.delete_cookie("refresh_token", path="/", samesite="Lax", secure=True)
+    response.delete_cookie("csrf_token",    path="/", samesite="Strict", secure=True)
     return response
 
 
@@ -1236,13 +1313,22 @@ def reset_password():
     # Clear the reset token
     models.clear_password_reset_token(str(user["id"]))
 
+    # Invalidate all existing sessions — a password reset ends all prior sessions
+    try:
+        models.store_refresh_token_hash(str(user["id"]), "")
+    except Exception as exc:
+        logger.error("reset_password: failed to invalidate refresh tokens: %s", exc)
+
     # Log the password change
     models.log_audit(
         user_id=str(user["id"]),
         action="password_reset",
     )
 
-    return jsonify({"message": "Password updated successfully"}), 200
+    resp = jsonify({"message": "Password updated successfully", "sessions_invalidated": True})
+    resp.delete_cookie("access_token",  path="/", samesite="Lax", secure=True)
+    resp.delete_cookie("refresh_token", path="/", samesite="Lax", secure=True)
+    return resp, 200
 
 
 @auth_bp.route("/verify-reset-token", methods=["GET"])
@@ -1326,12 +1412,16 @@ def refresh():
     except Exception as exc:
         logger.error("refresh: store new refresh token hash failed: %s", exc)
 
-    resp = jsonify({"access_token": new_tokens["access_token"]})
+    resp = jsonify({"ok": True})
     resp.set_cookie("access_token",  new_tokens["access_token"],
                     httponly=True, samesite="Lax", secure=True,
                     max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60)
     resp.set_cookie("refresh_token", new_tokens["refresh_token"],
                     httponly=True, samesite="Lax", secure=True,
+                    max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600)
+    csrf_tok = _generate_csrf_token()
+    resp.set_cookie("csrf_token", csrf_tok,
+                    httponly=False, samesite="Strict", secure=True,
                     max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600)
     return resp
 
@@ -1439,6 +1529,7 @@ def resend_verification():
 
 @auth_bp.route("/profile", methods=["POST"])
 @auth_required
+@csrf_required
 def update_profile():
     """
     POST /auth/profile — Update mutable user profile fields.
@@ -1490,7 +1581,13 @@ def update_profile():
                 "UPDATE users SET password_hash = %s WHERE id = %s",
                 (pw_hash, g.user_id),
             )
+        # Invalidate all existing sessions — password change ends all prior sessions
+        try:
+            models.store_refresh_token_hash(g.user_id, "")
+        except Exception as exc:
+            logger.error("update_profile: failed to invalidate refresh tokens: %s", exc)
         updates["password"] = "***"  # Don't send actual password back
+        updates["_sessions_invalidated"] = True
 
         # ── Security email: notify user their password was changed ───────────
         user_for_email = models.get_user_by_id(g.user_id)
@@ -1506,11 +1603,17 @@ def update_profile():
 
     # Return updated user object
     user = models.get_user_by_id(g.user_id)
-    return jsonify({
-        "ok":       True,
-        "full_name": user.get("full_name") if user else full_name,
-        "email":    user.get("email") if user else email,
+    sessions_invalidated = updates.pop("_sessions_invalidated", False)
+    resp = jsonify({
+        "ok":                  True,
+        "full_name":           user.get("full_name") if user else full_name,
+        "email":               user.get("email") if user else email,
+        "sessions_invalidated": sessions_invalidated,
     })
+    if sessions_invalidated:
+        resp.delete_cookie("access_token",  path="/", samesite="Lax", secure=True)
+        resp.delete_cookie("refresh_token", path="/", samesite="Lax", secure=True)
+    return resp
 
 
 # ---------------------------------------------------------------------------
