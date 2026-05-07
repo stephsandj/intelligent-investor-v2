@@ -300,7 +300,7 @@ _DB_AVAILABLE = False
 try:
     import models
     import plans as plan_gate
-    from auth import auth_bp, auth_required, admin_required, _get_client_ip
+    from auth import auth_bp, auth_required, admin_required, csrf_required, _get_client_ip
     from admin_routes import admin_bp
     from billing import billing_bp
 
@@ -1694,6 +1694,7 @@ def api_status():
 # ── Run API ───────────────────────────────────────────────────────────────────
 @app.route("/api/run", methods=["POST"])
 @auth_required
+@csrf_required
 def api_run():
     user_id = getattr(g, "user_id", None)
     
@@ -1730,6 +1731,7 @@ def api_run():
 
 @app.route("/api/run", methods=["DELETE"])
 @auth_required
+@csrf_required
 def api_stop():
     user_id = getattr(g, "user_id", None)
     was_running = _get_run_state(user_id).get("running", False)
@@ -1811,6 +1813,7 @@ def api_config_get():
 
 @app.route("/api/config", methods=["POST"])
 @auth_required
+@csrf_required
 def api_config_post():
     user_id = getattr(g, "user_id", None)
     data = request.get_json(force=True, silent=True) or {}
@@ -1858,6 +1861,7 @@ def api_picks_detail():
 # ── ETF / Bond screener APIs ──────────────────────────────────────────────────
 @app.route("/api/etf/run", methods=["POST"])
 @auth_required
+@csrf_required
 def api_etf_run():
     user_id = getattr(g, "user_id", None)
     if not user_id:
@@ -1886,6 +1890,7 @@ def api_etf_run():
 
 @app.route("/api/etf/stop", methods=["DELETE"])
 @auth_required
+@csrf_required
 def api_etf_stop():
     user_id = getattr(g, "user_id", None)
     # Cross-worker safe: also check the flag file so a stop request routed to a
@@ -1930,6 +1935,7 @@ def api_etf_stop():
 
 @app.route("/api/bond/stop", methods=["DELETE"])
 @auth_required
+@csrf_required
 def api_bond_stop():
     user_id = getattr(g, "user_id", None)
     # Cross-worker safe: also check the flag file so a stop request routed to a
@@ -1974,6 +1980,7 @@ def api_bond_stop():
 
 @app.route("/api/run/all", methods=["DELETE"])
 @auth_required
+@csrf_required
 def api_stop_all():
     """Stop all running screens for the current user — called on logout."""
     user_id = getattr(g, "user_id", None)
@@ -2040,6 +2047,7 @@ def api_etf_status():
 
 @app.route("/api/bond/run", methods=["POST"])
 @auth_required
+@csrf_required
 def api_bond_run():
     user_id = getattr(g, "user_id", None)
     if not user_id:
@@ -2092,6 +2100,7 @@ _TICKER_SYMBOL_RE = re.compile(r'^[A-Za-z]{1,10}([.\-][A-Za-z0-9]{1,5})?$')
 
 @app.route("/api/ticker/run", methods=["POST"])
 @auth_required
+@csrf_required
 def api_ticker_run():
     user_id = getattr(g, "user_id", None)
     body    = request.get_json(silent=True) or {}
@@ -2136,6 +2145,7 @@ def api_ticker_run():
 
 @app.route("/api/ticker/stop", methods=["DELETE"])
 @auth_required
+@csrf_required
 def api_ticker_stop():
     user_id = getattr(g, "user_id", None)
     with _ticker_state_lock:
