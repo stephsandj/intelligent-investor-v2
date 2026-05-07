@@ -303,7 +303,7 @@ def _generate_enhanced_fallback_analysis(pick: dict) -> dict:
     if debt_to_equity > 3:
         disqualifiers.append("Excessive leverage creates material solvency risk")
 
-    if profitable_yrs < (pick.get('hist_total_years', 10) // 2):
+    if profitable_yrs < ((pick.get('hist_total_years') or 10) // 2):
         disqualifiers.append("Inconsistent profitability; majority of recent years unprofitable")
 
     # Always provide assessment if no hard disqualifiers found

@@ -1306,7 +1306,8 @@ def reset_password():
 
     with models.db_cursor() as cur:
         cur.execute(
-            "UPDATE users SET password_hash = %s, email_verified = TRUE, email_verify_token = NULL WHERE id = %s",
+            "UPDATE users SET password_hash = %s, email_verified = TRUE, email_verify_token = NULL,"
+            " refresh_token_hash = NULL, refresh_token_issued = NULL WHERE id = %s",
             (password_hash, str(user["id"])),
         )
 
@@ -1578,7 +1579,7 @@ def update_profile():
         pw_hash = hash_password(new_pw)
         with models.db_cursor() as cur:
             cur.execute(
-                "UPDATE users SET password_hash = %s WHERE id = %s",
+                "UPDATE users SET password_hash = %s, refresh_token_hash = NULL, refresh_token_issued = NULL WHERE id = %s",
                 (pw_hash, g.user_id),
             )
         # Invalidate all existing sessions — password change ends all prior sessions
