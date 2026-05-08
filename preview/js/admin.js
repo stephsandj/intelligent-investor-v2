@@ -4,10 +4,22 @@ var _filteredUsers = [];
 var _currentPage = 'dashboard';
 var _adminInfo = null;
 
+// ═══════════════════ CSRF helper ═════════════
+function _getCookie(name) {
+  var match = document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'));
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
 // ═══════════════════ API helper ══════════════
 async function _api(method, path, body) {
   try {
-    var opts = { method: method, credentials: 'include', headers: { 'Content-Type': 'application/json' } };
+    var headers = { 'Content-Type': 'application/json' };
+    // Double-submit CSRF: attach admin_csrf_token cookie value as header for all state-changing requests
+    if (['POST','PUT','PATCH','DELETE'].indexOf(method.toUpperCase()) !== -1) {
+      var csrfToken = _getCookie('admin_csrf_token');
+      if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
+    }
+    var opts = { method: method, credentials: 'include', headers: headers };
     if (body) opts.body = JSON.stringify(body);
     var r = await fetch(path, opts);
     var data;
@@ -529,12 +541,12 @@ function confirmDelete(uid, email) {
   showConfirm(
     '⚠️',
     'Delete user?',
-    'Permanently delete <strong>' + email + '</strong> and all their data?<br>This action <strong>cannot be undone</strong>.',
+    'Permanently delete <strong>' + esc(email) + '</strong> and all their data?<br>This action <strong>cannot be undone</strong>.',
     'Delete User',
     function() {
       _api('DELETE', '/admin/api/users/' + uid).then(function(r) {
         if (!r.ok) { showToast(r.data.error || 'Delete failed', 'error'); return; }
-        showToast('User ' + email + ' deleted', 'success');
+        showToast('User ' + esc(email) + ' deleted', 'success');
         loadUsers();
       });
     }

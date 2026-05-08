@@ -41,3 +41,4 @@ certs/
 
 # Local PostgreSQL binaries (dev only, ~330 MB)
 # ~/Library/Application Support/PostgresApp/ is outside the repo
+test_secret.txt

@@ -4100,15 +4100,15 @@ function generateAnalysisHTML(pick, accent) {
   let html = `
     <div class="analysis-header">
       <div class="analysis-header-left">
-        <h2 style="color: ${accent}">${pick.symbol}</h2>
-        <p>${pick.name || ''}</p>
-        <p style="font-size:.75rem">${[pick.sector, pick.industry, pick.country].filter(Boolean).join(' · ')}</p>
+        <h2 style="color: ${accent}">${escapeHtml(pick.symbol)}</h2>
+        <p>${escapeHtml(pick.name || '')}</p>
+        <p style="font-size:.75rem">${[pick.sector, pick.industry, pick.country].filter(Boolean).map(escapeHtml).join(' · ')}</p>
         ${pick.price_change_pct != null ? `<p class="analysis-price" style="color: ${parseFloat(pick.price_change_pct) < 0 ? 'var(--red)' : 'var(--green)'}">▼ ${parseFloat(pick.price_change_pct).toFixed(2)}% today</p>` : ''}
       </div>
       <div class="analysis-header-right">
         <div class="analysis-score-num" style="color: ${accent}">${score}</div>
         <div class="analysis-score-pts" style="color: var(--muted)">/${maxScore}</div>
-        <div class="analysis-score-grade" style="color: ${gc.fg}; background: ${gc.bg}; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px;">${pick.grade || '—'}</div>
+        <div class="analysis-score-grade" style="color: ${gc.fg}; background: ${gc.bg}; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px;">${escapeHtml(pick.grade || '—')}</div>
         <div class="analysis-score-bar"><div class="analysis-score-fill" style="width: ${scorePercent}%"></div></div>
       </div>
     </div>
@@ -4142,7 +4142,7 @@ function generateAnalysisHTML(pick, accent) {
 
   html += `
     <div class="analysis-rec-box" style="background: ${bgColor}; border-left-color: ${borderColor}">
-      <p style="color: ${textColor}; margin-bottom: 8px;"><strong>${icon} ${rawLabel}</strong></p>
+      <p style="color: ${textColor}; margin-bottom: 8px;"><strong>${icon} ${escapeHtml(rawLabel)}</strong></p>
       <p>${escapeHtml(ai.recommendation_narrative) || 'Analysis pending...'}</p>
     </div>
   `;

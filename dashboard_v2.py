@@ -2211,13 +2211,38 @@ def api_my_plan():
 
 
 # ── Health check (no auth — for Nginx / load balancer) ───────────────────────
+def _health_caller_trusted() -> bool:
+    """Return True if the caller is an authenticated admin or an internal/monitoring IP."""
+    from auth import _get_client_ip
+    ip = _get_client_ip() or ""
+    # Allow Docker internal network + localhost
+    trusted_prefixes = ("127.", "::1", "172.16.", "172.17.", "172.18.", "172.19.",
+                        "172.20.", "172.21.", "172.22.", "172.23.", "172.24.",
+                        "172.25.", "172.26.", "172.27.", "172.28.", "172.29.",
+                        "172.30.", "172.31.", "10.", "192.168.")
+    if any(ip.startswith(p) for p in trusted_prefixes):
+        return True
+    # Also accept requests bearing a valid admin_access JWT
+    token = request.cookies.get("admin_access") or ""
+    if token:
+        try:
+            from auth import decode_token
+            payload = decode_token(token)
+            if payload.get("type") == "admin_access":
+                return True
+        except Exception:
+            pass
+    return False
+
+
 @app.route("/health")
 def health():
-    """Fix #9: Enhanced health + monitoring endpoint.
+    """Enhanced health + monitoring endpoint.
 
-    Returns JSON suitable for uptime monitors and alerting systems.
     Returns HTTP 200 when all critical systems are healthy,
     HTTP 503 when any critical check fails.
+    Full details are returned to internal/admin callers only;
+    public callers receive a minimal status for uptime monitors.
     """
     import shutil
     checks = {}
@@ -2269,12 +2294,19 @@ def health():
                             "configured": _jwt_ok}
 
     status_code = 200 if overall_ok else 503
-    return jsonify({
-        "status": "ok" if overall_ok else "degraded",
-        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-        "version": "v2",
-        "checks": checks,
-    }), status_code
+    status_str  = "ok" if overall_ok else "degraded"
+
+    # Internal/admin callers: return full diagnostic detail
+    if _health_caller_trusted():
+        return jsonify({
+            "status": status_str,
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            "version": "v2",
+            "checks": checks,
+        }), status_code
+
+    # Public callers (uptime monitors, etc.): minimal response only
+    return jsonify({"status": status_str}), status_code
 
 
 # ─────────────────────────────────────────────────────────────────────────────

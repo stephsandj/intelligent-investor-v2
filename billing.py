@@ -7,9 +7,11 @@ Price ID env vars: STRIPE_PRICE_<PLAN>_<CYCLE>  e.g. STRIPE_PRICE_STARTER_MONTHL
 
 import stripe
 
+import html as _html
 import json
 import logging
 import os
+import time as _time
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 
@@ -496,6 +498,13 @@ def success():
     """
     GET /billing/success?session_id=<session_id>
     Stripe checkout success redirect. Retrieves session details and updates subscription if needed.
+
+    Security guards (defense-in-depth — webhook is the authoritative payment processor):
+    1. session.status must be "complete"
+    2. session.payment_status must be "paid"
+    3. session.client_reference_id / metadata.user_id must match the authenticated user's JWT
+       (if a user is logged in). Anonymous access still redirects safely — the DB write only
+       happens when user_id is embedded in the Stripe session by our own checkout code.
     """
     session_id = request.args.get("session_id", "").strip()
     if not session_id:
@@ -520,6 +529,24 @@ def success():
             # Even if we can't retrieve it now, redirect. Webhook will process it.
             return redirect("/")
 
+        # ── Guard 1: session must be complete ──────────────────────────
+        session_status = getattr(session, "status", None)
+        if session_status != "complete":
+            logger.warning(
+                "success: session %s has status=%s (expected complete) — skipping DB write",
+                session_id, session_status,
+            )
+            return redirect("/")
+
+        # ── Guard 2: payment must be paid ──────────────────────────────
+        payment_status = getattr(session, "payment_status", None)
+        if payment_status != "paid":
+            logger.warning(
+                "success: session %s has payment_status=%s (expected paid) — skipping DB write",
+                session_id, payment_status,
+            )
+            return redirect("/")
+
         # Stripe SDK v5+ uses attribute access, not .get()
         # Use getattr with fallback to safely read fields
         user_id = (
@@ -529,6 +556,27 @@ def success():
         if not user_id:
             logger.warning("success: session %s missing user_id", session_id)
             return redirect("/")
+
+        # ── Guard 3: if caller is authenticated, verify session ownership ─
+        # Prevents a logged-in user from triggering activation on another
+        # user's session_id (e.g. from URL history or shared links).
+        from auth import _extract_token_from_request, decode_token
+        import jwt as _jwt_mod
+        try:
+            jwt_token = _extract_token_from_request()
+            if jwt_token:
+                payload = decode_token(jwt_token)
+                caller_id = payload.get("sub")
+                if caller_id and caller_id != str(user_id):
+                    logger.warning(
+                        "success: caller %s tried to activate session belonging to user %s — denied",
+                        caller_id[:8], str(user_id)[:8],
+                    )
+                    return redirect("/")
+        except (_jwt_mod.InvalidTokenError, Exception):
+            # No valid token or decode error — unauthenticated caller; proceed
+            # (webhook is the authoritative processor, this is just a UI redirect)
+            pass
 
         # customer/subscription may be expanded objects; extract the ID string
         customer_raw = getattr(session, "customer", None)
@@ -615,6 +663,11 @@ def cancel():
 # Destination for all enterprise sales inquiries
 _ENTERPRISE_INQUIRY_TO = "enroll@terminalelearn.com"
 
+# IP-based rate limit for enterprise inquiry: 5 submissions per 15 minutes per IP
+_INQUIRY_RATE_LIMIT: dict = {}   # ip -> [timestamp, ...]
+_INQUIRY_RL_WINDOW  = 900        # 15 minutes
+_INQUIRY_RL_MAX     = 5
+
 
 @billing_bp.route("/enterprise-inquiry", methods=["POST"])
 def enterprise_inquiry():
@@ -624,7 +677,17 @@ def enterprise_inquiry():
     Public endpoint — accessible by both authenticated and unauthenticated users.
     Body (JSON): { name, company, email, message }
     """
-    from auth import _send_email, _smtp_configured
+    from auth import _send_email, _smtp_configured, _get_client_ip
+
+    # ── IP-based rate limit ─────────────────────────────────────────────────
+    ip  = _get_client_ip() or "unknown"
+    now = _time.time()
+    hits = [t for t in _INQUIRY_RATE_LIMIT.get(ip, []) if now - t < _INQUIRY_RL_WINDOW]
+    if len(hits) >= _INQUIRY_RL_MAX:
+        logger.warning("enterprise-inquiry: rate limit exceeded for ip=%s", ip)
+        return jsonify({"error": "Too many requests. Please try again later."}), 429
+    hits.append(now)
+    _INQUIRY_RATE_LIMIT[ip] = hits
 
     body    = request.get_json(silent=True) or {}
     name    = str(body.get("name",    "")).strip()
@@ -640,12 +703,26 @@ def enterprise_inquiry():
     user_email = form_email or auth_user.get("email", "") or ""
     user_id    = getattr(g, "user_id", "anonymous")
 
+    # ── Strip newlines from all fields used in email headers (header injection) ──
+    def _strip_newlines(s: str) -> str:
+        return s.replace("\r", "").replace("\n", " ")
+
+    name       = _strip_newlines(name)
+    company    = _strip_newlines(company)
+    user_email = _strip_newlines(user_email)
+
     subject = "Enterprise Sales Inquiry"
     if name or user_email:
         label = name or user_email
-        subject = f"Enterprise Sales Inquiry — {label}"
+        subject = f"Enterprise Sales Inquiry — {_strip_newlines(label)}"
         if company:
-            subject = f"Enterprise Sales Inquiry — {label} ({company})"
+            subject = f"Enterprise Sales Inquiry — {_strip_newlines(label)} ({_strip_newlines(company)})"
+
+    # ── HTML-escape all user-controlled fields in the email body ──────────
+    name_h       = _html.escape(name or "—")
+    company_h    = _html.escape(company or "—")
+    user_email_h = _html.escape(user_email or "—")
+    message_h    = _html.escape(message)
 
     html_body = f"""
 <html><body style="font-family:sans-serif;color:#333;max-width:620px;margin:0 auto">
@@ -653,19 +730,19 @@ def enterprise_inquiry():
   <table style="width:100%;border-collapse:collapse;font-size:14px">
     <tr style="background:#fafafa">
       <td style="padding:10px 14px;font-weight:600;width:160px;border:1px solid #e5e7eb">Name</td>
-      <td style="padding:10px 14px;border:1px solid #e5e7eb">{name or "—"}</td>
+      <td style="padding:10px 14px;border:1px solid #e5e7eb">{name_h}</td>
     </tr>
     <tr>
       <td style="padding:10px 14px;font-weight:600;border:1px solid #e5e7eb">Company / Fund</td>
-      <td style="padding:10px 14px;border:1px solid #e5e7eb">{company or "—"}</td>
+      <td style="padding:10px 14px;border:1px solid #e5e7eb">{company_h}</td>
     </tr>
     <tr style="background:#fafafa">
       <td style="padding:10px 14px;font-weight:600;border:1px solid #e5e7eb">Email</td>
-      <td style="padding:10px 14px;border:1px solid #e5e7eb">{user_email or "—"}</td>
+      <td style="padding:10px 14px;border:1px solid #e5e7eb">{user_email_h}</td>
     </tr>
     <tr>
       <td style="padding:10px 14px;font-weight:600;vertical-align:top;border:1px solid #e5e7eb">Message</td>
-      <td style="padding:10px 14px;white-space:pre-wrap;border:1px solid #e5e7eb">{message}</td>
+      <td style="padding:10px 14px;white-space:pre-wrap;border:1px solid #e5e7eb">{message_h}</td>
     </tr>
   </table>
   <p style="margin-top:20px;font-size:12px;color:#999">

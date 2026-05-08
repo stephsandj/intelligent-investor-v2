@@ -84,6 +84,23 @@ def _handle_exception(exc: Exception, action: str, logger_obj) -> tuple:
     return jsonify({"error": "An error occurred. Please try again."}), 500
 
 
+def _require_superadmin():
+    """Return a 403 response tuple if the current admin is not a superadmin, else None.
+
+    Usage inside a view:
+        err = _require_superadmin()
+        if err: return err
+    """
+    role = (g.admin or {}).get("role", "")
+    if role != "superadmin":
+        logger.warning(
+            "RBAC: admin %s (role=%s) attempted a superadmin-only action on %s",
+            g.admin_id, role, request.path,
+        )
+        return jsonify({"error": "Superadmin role required for this action", "code": "forbidden"}), 403
+    return None
+
+
 # ---------------------------------------------------------------------------
 # POST /admin/api/login  — Admin portal login (admin_accounts table)
 # ---------------------------------------------------------------------------
@@ -118,6 +135,9 @@ def admin_login():
         ip_address=request.remote_addr,
     )
 
+    import secrets as _secrets
+    admin_csrf = _secrets.token_hex(32)
+
     resp = make_response(jsonify({
         "ok": True,
         "admin_id": admin_id,
@@ -128,6 +148,13 @@ def admin_login():
     resp.set_cookie(
         "admin_access", token,
         httponly=True, samesite="Lax", secure=True,   # must be True in prod — HTTPS only
+        max_age=8 * 3600,
+        path="/admin",
+    )
+    # JS-readable CSRF token for admin portal double-submit pattern
+    resp.set_cookie(
+        "admin_csrf_token", admin_csrf,
+        httponly=False, samesite="Lax", secure=True,
         max_age=8 * 3600,
         path="/admin",
     )
@@ -151,7 +178,8 @@ def admin_logout():
         except Exception:
             pass
     resp = make_response(jsonify({"ok": True}))
-    resp.delete_cookie("admin_access", path="/admin", samesite="Lax", secure=True)
+    resp.delete_cookie("admin_access",       path="/admin", samesite="Lax", secure=True)
+    resp.delete_cookie("admin_csrf_token",   path="/admin", samesite="Lax", secure=True)
     return resp, 200
 
 
@@ -479,7 +507,7 @@ def api_create_user():
 
     if not email or "@" not in email:
         return jsonify({"error": "Invalid input"}), 422
-    if len(password) < 8:
+    if len(password) < 12:
         password = secrets.token_urlsafe(16)
 
     if get_user_by_email(email):
@@ -524,6 +552,9 @@ def api_create_user():
 @admin_portal_required
 def api_delete_user(user_id: str):
     """Hard-delete a user and all related data."""
+    err = _require_superadmin()
+    if err:
+        return err
     user = get_user_by_id(user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
@@ -537,7 +568,8 @@ def api_delete_user(user_id: str):
     try:
         delete_user(user_id)
     except Exception as exc:
-        return jsonify({"error": f"Failed to delete user: {exc}"}), 500
+        logger.error("delete_user failed: %s", exc, exc_info=True)
+        return jsonify({"error": "An internal error occurred"}), 500
     return jsonify({"message": f"User {user_id} deleted."}), 200
 
 
@@ -549,6 +581,9 @@ def api_delete_user(user_id: str):
 @admin_portal_required
 def api_bulk_delete_users():
     """Bulk hard-delete a list of users. Body: { user_ids: [uuid, ...] }"""
+    err = _require_superadmin()
+    if err:
+        return err
     data     = request.get_json(silent=True) or {}
     user_ids = data.get("user_ids", [])
 
@@ -575,7 +610,8 @@ def api_bulk_delete_users():
             delete_user(uid)
             deleted += 1
         except Exception as exc:
-            errors.append(f"{uid}: {exc}")
+            logger.error("bulk_delete uid=%s failed: %s", uid, exc, exc_info=True)
+            errors.append(f"{uid}: internal error")
 
     return jsonify({"deleted": deleted, "errors": errors}), 200
 
@@ -602,7 +638,8 @@ def api_update_user(user_id: str):
             update_user_profile(user_id, full_name=(data["full_name"] or "").strip() or None)
             changes.append("full_name")
         except Exception as exc:
-            return jsonify({"error": f"Failed to update full_name: {exc}"}), 500
+            logger.error("update_full_name failed: %s", exc, exc_info=True)
+            return jsonify({"error": "An internal error occurred"}), 500
 
     if "email" in data:
         new_email = (data["email"] or "").strip().lower()
@@ -615,18 +652,20 @@ def api_update_user(user_id: str):
             update_user_email(user_id, new_email)
             changes.append("email")
         except Exception as exc:
-            return jsonify({"error": f"Failed to update email: {exc}"}), 500
+            logger.error("update_email failed: %s", exc, exc_info=True)
+            return jsonify({"error": "An internal error occurred"}), 500
 
     if "password" in data:
         new_pw = data["password"]
-        if not new_pw or len(new_pw) < 8:
-            return jsonify({"error": "Password must be at least 8 characters"}), 422
+        if not new_pw or len(new_pw) < 12:
+            return jsonify({"error": "Password must be at least 12 characters"}), 422
         try:
             with db_cursor() as cur:
                 cur.execute("UPDATE users SET password_hash = %s WHERE id = %s", (hash_password(new_pw), user_id))
             changes.append("password")
         except Exception as exc:
-            return jsonify({"error": f"Failed to update password: {exc}"}), 500
+            logger.error("update_password failed: %s", exc, exc_info=True)
+            return jsonify({"error": "An internal error occurred"}), 500
 
     if changes:
         log_audit(
@@ -655,7 +694,8 @@ def api_list_plans():
             )
             rows = cur.fetchall()
     except Exception as exc:
-        return jsonify({"error": f"Database error: {exc}"}), 500
+        logger.error("database error: %s", exc, exc_info=True)
+        return jsonify({"error": "An internal error occurred"}), 500
 
     plans = []
     for row in rows:
@@ -691,7 +731,8 @@ def api_audit_log():
             )
             rows = cur.fetchall()
     except Exception as exc:
-        return jsonify({"error": f"Database error: {exc}"}), 500
+        logger.error("database error: %s", exc, exc_info=True)
+        return jsonify({"error": "An internal error occurred"}), 500
 
     entries = []
     for row in rows:
@@ -1007,6 +1048,9 @@ def extend_trial(user_id: str):
 @admin_portal_required
 def make_admin(user_id: str):
     """Grant admin role to a user."""
+    err = _require_superadmin()
+    if err:
+        return err
     user = get_user_by_id(user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
@@ -1140,7 +1184,8 @@ def audit_log():
             )
             rows = cur.fetchall()
     except Exception as exc:
-        return jsonify({"error": f"Database error: {exc}"}), 500
+        logger.error("database error: %s", exc, exc_info=True)
+        return jsonify({"error": "An internal error occurred"}), 500
 
     entries = []
     for row in rows:
@@ -1171,7 +1216,8 @@ def list_plans():
             )
             rows = cur.fetchall()
     except Exception as exc:
-        return jsonify({"error": f"Database error: {exc}"}), 500
+        logger.error("database error: %s", exc, exc_info=True)
+        return jsonify({"error": "An internal error occurred"}), 500
 
     plans = []
     for row in rows:
@@ -1243,7 +1289,8 @@ def update_plan(plan_id):
             )
             row = cur.fetchone()
     except Exception as exc:
-        return jsonify({"error": f"Database error: {exc}"}), 500
+        logger.error("database error: %s", exc, exc_info=True)
+        return jsonify({"error": "An internal error occurred"}), 500
 
     if not row:
         return jsonify({"error": "Plan not found"}), 404
@@ -1331,7 +1378,7 @@ def create_admin_user():
 
     if not email or "@" not in email:
         return jsonify({"error": "A valid email address is required"}), 422
-    if not password or len(password) < 8:
+    if not password or len(password) < 12:
         password = secrets.token_urlsafe(16)  # fallback
 
     if get_user_by_email(email):
@@ -1341,7 +1388,8 @@ def create_admin_user():
         password_hash = hash_password(password)
         user = create_user(email, password_hash, full_name)
     except Exception as exc:
-        return jsonify({"error": f"Failed to create user: {exc}"}), 500
+        logger.error("create_user failed: %s", exc, exc_info=True)
+        return jsonify({"error": "An internal error occurred"}), 500
 
     user_id = str(user["id"])
 
@@ -1356,7 +1404,8 @@ def create_admin_user():
             trial_ends_at=trial_ends_at,
         )
     except Exception as exc:
-        return jsonify({"error": f"User created but subscription failed: {exc}"}), 207
+        logger.error("subscription_create failed: %s", exc, exc_info=True)
+        return jsonify({"error": "User created but subscription setup encountered an error"}), 207
 
     # Optionally mark email as verified
     if should_verify:
@@ -1394,6 +1443,9 @@ def create_admin_user():
 @admin_portal_required
 def delete_admin_user(user_id: str):
     """Hard-delete a user and all related data."""
+    err = _require_superadmin()
+    if err:
+        return err
     if user_id == g.admin_id:
         return jsonify({"error": "You cannot delete your own account"}), 400
 
@@ -1410,7 +1462,8 @@ def delete_admin_user(user_id: str):
     try:
         delete_user(user_id)
     except Exception as exc:
-        return jsonify({"error": f"Failed to delete user: {exc}"}), 500
+        logger.error("delete_user failed: %s", exc, exc_info=True)
+        return jsonify({"error": "An internal error occurred"}), 500
 
     return jsonify({"message": f"User {user_id} deleted."}), 200
 
@@ -1447,7 +1500,8 @@ def update_admin_user(user_id: str):
             update_user_profile(user_id, full_name=full_name)
             changes.append("full_name")
         except Exception as exc:
-            return jsonify({"error": f"Failed to update full_name: {exc}"}), 500
+            logger.error("update_full_name failed: %s", exc, exc_info=True)
+            return jsonify({"error": "An internal error occurred"}), 500
 
     if "email" in data:
         new_email = (data["email"] or "").strip().lower()
@@ -1460,12 +1514,13 @@ def update_admin_user(user_id: str):
             update_user_email(user_id, new_email)
             changes.append("email")
         except Exception as exc:
-            return jsonify({"error": f"Failed to update email: {exc}"}), 500
+            logger.error("update_email failed: %s", exc, exc_info=True)
+            return jsonify({"error": "An internal error occurred"}), 500
 
     if "password" in data:
         new_pw = data["password"]
-        if not new_pw or len(new_pw) < 8:
-            return jsonify({"error": "Password must be at least 8 characters"}), 422
+        if not new_pw or len(new_pw) < 12:
+            return jsonify({"error": "Password must be at least 12 characters"}), 422
         try:
             pw_hash = hash_password(new_pw)
             with db_cursor() as cur:
@@ -1475,7 +1530,8 @@ def update_admin_user(user_id: str):
                 )
             changes.append("password")
         except Exception as exc:
-            return jsonify({"error": f"Failed to update password: {exc}"}), 500
+            logger.error("update_password failed: %s", exc, exc_info=True)
+            return jsonify({"error": "An internal error occurred"}), 500
 
     if changes:
         log_audit(
@@ -1509,7 +1565,8 @@ def admin_verify_email(user_id: str):
     try:
         verify_user_email(user_id)
     except Exception as exc:
-        return jsonify({"error": f"Failed to verify email: {exc}"}), 500
+        logger.error("verify_email failed: %s", exc, exc_info=True)
+        return jsonify({"error": "An internal error occurred"}), 500
 
     log_audit(
         actor_id=g.admin_id,
@@ -1543,7 +1600,8 @@ def admin_unverify_email(user_id: str):
                 (user_id,),
             )
     except Exception as exc:
-        return jsonify({"error": f"Failed to unverify email: {exc}"}), 500
+        logger.error("unverify_email failed: %s", exc, exc_info=True)
+        return jsonify({"error": "An internal error occurred"}), 500
 
     log_audit(
         actor_id=g.admin_id,
@@ -1563,6 +1621,9 @@ def admin_unverify_email(user_id: str):
 @admin_portal_required
 def revoke_admin(user_id: str):
     """Revoke admin role from a user."""
+    err = _require_superadmin()
+    if err:
+        return err
     if user_id == g.admin_id:
         return jsonify({"error": "You cannot revoke your own admin role"}), 400
 
@@ -1577,7 +1638,8 @@ def revoke_admin(user_id: str):
         with db_cursor() as cur:
             cur.execute("DELETE FROM admin_users WHERE user_id = %s", (user_id,))
     except Exception as exc:
-        return jsonify({"error": f"Failed to revoke admin: {exc}"}), 500
+        logger.error("revoke_admin failed: %s", exc, exc_info=True)
+        return jsonify({"error": "An internal error occurred"}), 500
 
     log_audit(
         actor_id=g.admin_id,
@@ -1601,7 +1663,8 @@ def list_subscriptions():
     try:
         subs = get_all_subscriptions_with_user(limit=limit)
     except Exception as exc:
-        return jsonify({"error": f"Database error: {exc}"}), 500
+        logger.error("database error: %s", exc, exc_info=True)
+        return jsonify({"error": "An internal error occurred"}), 500
 
     return jsonify({
         "subscriptions": subs,
@@ -1707,7 +1770,8 @@ def api_metrics():
     try:
         series = get_metrics_series(range_label)
     except Exception as exc:
-        return jsonify({"error": f"Failed to load metrics: {exc}"}), 500
+        logger.error("load_metrics failed: %s", exc, exc_info=True)
+        return jsonify({"error": "An internal error occurred"}), 500
 
     latest = series[-1] if series else {}
 

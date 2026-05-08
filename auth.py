@@ -877,6 +877,10 @@ def admin_portal_required(fn):
     Decorator for admin portal API routes.
     Checks for admin_access token (from admin_access cookie or Authorization header).
     Admin accounts are stored in admin_accounts table — completely separate from app users.
+
+    For state-changing methods (POST/PUT/PATCH/DELETE) the decorator also enforces
+    CSRF double-submit: the frontend must read the admin_csrf_token cookie and echo
+    it in the X-CSRF-Token header.  GET/HEAD/OPTIONS are exempt.
     """
     @wraps(fn)
     def wrapper(*args, **kwargs):
@@ -910,6 +914,22 @@ def admin_portal_required(fn):
             _admin_last_activity.pop(admin_id, None)
             return jsonify({"error": "Session expired due to inactivity — please log in again", "code": "idle_timeout"}), 401
         _admin_last_activity[admin_id] = now
+
+        # ── Admin CSRF double-submit (state-changing methods only) ──────
+        if request.method not in ("GET", "HEAD", "OPTIONS", "TRACE"):
+            csrf_cookie = request.cookies.get("admin_csrf_token", "")
+            csrf_header = request.headers.get("X-CSRF-Token", "")
+            if not csrf_cookie or not csrf_header:
+                logger.warning(
+                    "Admin CSRF token missing — cookie=%s header=%s path=%s admin=%s",
+                    bool(csrf_cookie), bool(csrf_header), request.path, admin_id[:8],
+                )
+                return jsonify({"error": "Admin CSRF validation failed", "code": "csrf_missing"}), 403
+            if not _hmac.compare_digest(csrf_cookie.encode(), csrf_header.encode()):
+                logger.warning(
+                    "Admin CSRF token mismatch path=%s admin=%s", request.path, admin_id[:8]
+                )
+                return jsonify({"error": "Admin CSRF validation failed", "code": "csrf_mismatch"}), 403
 
         g.admin_id = admin_id
         g.admin = admin

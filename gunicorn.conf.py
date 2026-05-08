@@ -30,7 +30,9 @@ access_log_format = '%(h)s "%(r)s" %(s)s %(b)s %(D)sµs'
 # ── Security ──────────────────────────────────────────────────────
 limit_request_line   = 4096
 limit_request_fields = 100
-forwarded_allow_ips  = "*"   # Trust X-Forwarded-For from Nginx
+# Trust X-Forwarded-For only from the Nginx container on the Docker bridge network.
+# Override with GUNICORN_FORWARDED_IPS env var if your network CIDR is different.
+forwarded_allow_ips  = os.environ.get("GUNICORN_FORWARDED_IPS", "172.18.0.0/16")
 secure_scheme_headers = {"X-Forwarded-Proto": "https"}
 
 # ── Process name ─────────────────────────────────────────────────
