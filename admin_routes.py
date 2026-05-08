@@ -596,11 +596,11 @@ def api_bulk_delete_users():
     errors  = []
 
     for uid in user_ids:
-        user = get_user_by_id(uid)
-        if not user:
-            errors.append(f"{uid}: not found")
-            continue
         try:
+            user = get_user_by_id(uid)
+            if not user:
+                errors.append(f"{uid}: not found")
+                continue
             log_audit(
                 actor_id=g.admin_id,
                 target_user_id=uid,
