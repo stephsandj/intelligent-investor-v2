@@ -188,6 +188,13 @@ app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024  # 1 MB max body
 from limiter import limiter
 limiter.init_app(app)
 
+@app.errorhandler(429)
+def _rate_limit_handler(e):
+    """Return JSON 429 instead of flask-limiter's default text/html."""
+    from flask import jsonify as _j
+    logger.warning("Rate limit hit: %s", e.description)
+    return _j({"error": "Too many requests. Please try again later.", "code": "rate_limited"}), 429
+
 # Initialize Sentry for error tracking (if DSN is configured)
 _SENTRY_DSN = os.environ.get("SENTRY_DSN", "").strip()
 if _SENTRY_DSN:
