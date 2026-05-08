@@ -184,6 +184,10 @@ app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
 app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024  # 1 MB max body
 
+# ── Rate limiter (Redis-backed, shared across all Gunicorn workers) ────────
+from limiter import limiter
+limiter.init_app(app)
+
 # Initialize Sentry for error tracking (if DSN is configured)
 _SENTRY_DSN = os.environ.get("SENTRY_DSN", "").strip()
 if _SENTRY_DSN:
@@ -217,8 +221,10 @@ def _security_headers(response):
         "max-age=31536000; includeSubDomains",
     )
 
-    # Admin panel has no inline scripts/styles — apply strict CSP with no unsafe-inline.
-    # Main SPA still uses unsafe-inline (index.html has 135 inline handlers; tracked as TODO).
+    # Admin panel: strict CSP with no unsafe-inline.
+    # Main SPA (/): CSP is set per-request in index() with a nonce + strict-dynamic.
+    #   'unsafe-inline' is retained as fallback for the 134 inline event handlers
+    #   pending conversion to addEventListener (tracked as follow-up task).
     if request.path.startswith("/admin"):
         response.headers.setdefault(
             "Content-Security-Policy",
@@ -1591,16 +1597,43 @@ def serve_css(filename):
 
 @app.route("/")
 def index():
-    """Serve the main SaaS UI (self-contained preview/index.html)."""
+    """Serve the main SaaS UI (self-contained preview/index.html).
+
+    A per-request nonce is injected into the single <script> block and
+    included in the CSP header as 'nonce-<value>'.  Browsers that support
+    CSP3 will also honour 'strict-dynamic', which allows scripts loaded
+    by the nonce-trusted block while ignoring the 'unsafe-inline' fallback
+    for dynamically-created scripts.  (Inline event-handler conversion to
+    addEventListener is tracked separately as a follow-up engineering task.)
+    """
+    import secrets as _sec
+    nonce = _sec.token_hex(16)          # 32 hex chars, cryptographically random
+
     preview_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "preview", "index.html")
     try:
         with open(preview_path, "r", encoding="utf-8") as f:
             html = f.read()
+        html = html.replace("{{CSP_NONCE}}", nonce, 1)
+
+        csp = (
+            "default-src 'self'; "
+            f"script-src 'self' 'nonce-{nonce}' 'unsafe-inline' 'strict-dynamic' https://js.stripe.com; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: https:; "
+            "connect-src 'self' https://api.stripe.com; "
+            "frame-src https://js.stripe.com; "
+            "font-src 'self' data:; "
+            "object-src 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self';"
+        )
+
         return html, 200, {
             "Content-Type": "text/html; charset=utf-8",
             "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
             "Pragma": "no-cache",
             "Expires": "0",
+            "Content-Security-Policy": csp,
         }
     except FileNotFoundError:
         return "<h1>UI not found — expected preview/index.html</h1>", 404

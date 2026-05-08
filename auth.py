@@ -27,6 +27,14 @@ from flask import Blueprint, g, jsonify, redirect, request
 
 import models
 
+# Flask-limiter is imported lazily inside route decorators so this module can
+# be loaded before the Flask app (and limiter) are fully initialised.
+try:
+    from limiter import limiter as _limiter
+    _LIMITER_AVAILABLE = True
+except ImportError:
+    _LIMITER_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -987,6 +995,7 @@ auth_bp = Blueprint("auth_bp", __name__, url_prefix="/auth")
 
 
 @auth_bp.route("/register", methods=["POST"])
+@(_limiter.limit("5 per minute") if _LIMITER_AVAILABLE else lambda f: f)
 def register():
     """POST /auth/register — Create account + trial subscription + send verification email."""
     ip = _get_client_ip()
@@ -1092,6 +1101,7 @@ def register():
 
 
 @auth_bp.route("/login", methods=["POST"])
+@(_limiter.limit("10 per 15 minutes") if _LIMITER_AVAILABLE else lambda f: f)
 def login():
     """POST /auth/login — Authenticate and return tokens with account lockout protection."""
     data     = request.get_json(silent=True) or {}
@@ -1221,6 +1231,7 @@ def logout():
 
 
 @auth_bp.route("/forgot-password", methods=["POST"])
+@(_limiter.limit("3 per 15 minutes") if _LIMITER_AVAILABLE else lambda f: f)
 def forgot_password():
     """POST /auth/forgot-password — Send password reset link via email."""
     ip = _get_client_ip()

@@ -11,11 +11,14 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     env_file: .env
     environment:
       DATABASE_URL: postgresql://ii_user:${DB_PASSWORD}@db:5432/intelligentinvestor
       GUNICORN_BIND: 0.0.0.0:5050
       PORT: '5050'
+      REDIS_URL: redis://redis:6379/0
     expose:
     - '5050'
     labels:
@@ -49,6 +52,19 @@ services:
     volumes:
     - certbot_certs:/etc/letsencrypt
     - certbot_www:/var/www/certbot
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru --save ""
+    expose:
+    - '6379'
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+    - ii_net
+    restart: unless-stopped
   db:
     environment:
       PGDATA: /var/lib/postgresql/data/pgdata

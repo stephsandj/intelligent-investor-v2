@@ -37,6 +37,11 @@ pillow==12.2.0
 APScheduler==3.11.2
 schedule==1.2.2
 
+# Rate limiting (shared across Gunicorn workers via Redis)
+flask-limiter[redis]==3.9.4
+redis==5.2.1
+limits==4.0.1
+
 # Utilities
 python-dotenv==1.2.2
 pytz==2026.2

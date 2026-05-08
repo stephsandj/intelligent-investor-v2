@@ -20,6 +20,12 @@ from flask import Blueprint, g, jsonify, request, redirect
 from auth import auth_required
 import models
 
+try:
+    from limiter import limiter as _limiter
+    _LIMITER_AVAILABLE = True
+except ImportError:
+    _LIMITER_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -663,31 +669,23 @@ def cancel():
 # Destination for all enterprise sales inquiries
 _ENTERPRISE_INQUIRY_TO = "enroll@terminalelearn.com"
 
-# IP-based rate limit for enterprise inquiry: 5 submissions per 15 minutes per IP
-_INQUIRY_RATE_LIMIT: dict = {}   # ip -> [timestamp, ...]
+# Rate limiting for enterprise inquiry is now handled by flask-limiter (Redis-backed).
+# These constants are kept as fallback documentation only.
 _INQUIRY_RL_WINDOW  = 900        # 15 minutes
 _INQUIRY_RL_MAX     = 5
 
 
 @billing_bp.route("/enterprise-inquiry", methods=["POST"])
+@(_limiter.limit("5 per 15 minutes") if _LIMITER_AVAILABLE else lambda f: f)
 def enterprise_inquiry():
     """
     POST /billing/enterprise-inquiry
     Submits an Enterprise Sales inquiry form and emails it to the sales address.
     Public endpoint — accessible by both authenticated and unauthenticated users.
     Body (JSON): { name, company, email, message }
+    Rate-limited: 5 submissions per 15 minutes per IP (Redis-backed, shared across workers).
     """
     from auth import _send_email, _smtp_configured, _get_client_ip
-
-    # ── IP-based rate limit ─────────────────────────────────────────────────
-    ip  = _get_client_ip() or "unknown"
-    now = _time.time()
-    hits = [t for t in _INQUIRY_RATE_LIMIT.get(ip, []) if now - t < _INQUIRY_RL_WINDOW]
-    if len(hits) >= _INQUIRY_RL_MAX:
-        logger.warning("enterprise-inquiry: rate limit exceeded for ip=%s", ip)
-        return jsonify({"error": "Too many requests. Please try again later."}), 429
-    hits.append(now)
-    _INQUIRY_RATE_LIMIT[ip] = hits
 
     body    = request.get_json(silent=True) or {}
     name    = str(body.get("name",    "")).strip()
